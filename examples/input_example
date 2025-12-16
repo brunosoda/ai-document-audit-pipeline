@@ -1,0 +1,109 @@
+{
+  "conference_uuid": "REDACTED_UUID",
+  "audit_uuid": "REDACTED_UUID",
+  "tenant_id": 1,
+  "tenant": "dne",
+  "product": "default",
+  "validation_date": "2025-12-14T00:00:00.000Z",
+  "url_optimized": "https://api.onedocs.com.br/conference/file/download?path=REDACTED_PATH",
+  "raw_input_data": {
+    "product": "default",
+    "uploads": {
+      "SELFIE": "https://s3.us-east-1.amazonaws.com/placeholder/selfie_image",
+      "DOCUMENT_FRONT": "https://s3.us-east-1.amazonaws.com/placeholder/document_front_image",
+      "SCHOLARITY_CERTIFICATE_FRONT": "https://s3.us-east-1.amazonaws.com/placeholder/scholarity_certificate_image"
+    },
+    "flowName": "dne-padrao",
+    "userUuid": "REDACTED_UUID",
+    "userInfos": {
+      "SELFIE": [],
+      "DOCUMENT": [
+        {
+          "key": "documentType",
+          "value": "DOCUMENT"
+        },
+        {
+          "key": "documentDescription",
+          "value": "RG"
+        },
+        {
+          "key": "name",
+          "value": "REDACTED_NAME"
+        },
+        {
+          "key": "socialName",
+          "value": null
+        },
+        {
+          "key": "birthDate",
+          "value": "REDACTED_DATE"
+        },
+        {
+          "key": "document",
+          "value": "REDACTED_DOCUMENT_NUMBER"
+        },
+        {
+          "key": "cpf",
+          "value": "REDACTED_CPF"
+        }
+      ],
+      "SCHOLARITY_CERTIFICATE": [
+        {
+          "key": "documentType",
+          "value": "SCHOLARITY_CERTIFICATE"
+        },
+        {
+          "key": "documentDescription",
+          "value": "ATESTADO"
+        },
+        {
+          "key": "name",
+          "value": "REDACTED_NAME"
+        },
+        {
+          "key": "institutionName",
+          "value": "REDACTED_INSTITUTION_NAME"
+        },
+        {
+          "key": "socialName",
+          "value": null
+        },
+        {
+          "key": "institutionAbbreviation",
+          "value": "IBMEC"
+        },
+        {
+          "key": "institutionId",
+          "value": 236381
+        },
+        {
+          "key": "institutionCnpj",
+          "value": "REDACTED_CNPJ"
+        },
+        {
+          "key": "institutionMaintainer",
+          "value": "Grupo Ibmec Educacional S.a"
+        },
+        {
+          "key": "educationalDegree",
+          "value": "Pós graduação/Especialização"
+        },
+        {
+          "key": "course",
+          "value": " MBA em Inovação, Estratégia e Inteligência Competitiva"
+        },
+        {
+          "key": "enrollmentNumber",
+          "value": "REDACTED_ENROLLMENT_NUMBER"
+        }
+      ]
+    },
+    "instituicaoId": 236381,
+    "solicitacaoId": 12037268,
+    "competencyDate": "2025-12-14 12:43:09",
+    "conferencePartnerId": 1,
+    "partnerReferenceCode": "12037268"
+  },
+  "combined_rules": [],
+  "di_type": "RG"
+}
