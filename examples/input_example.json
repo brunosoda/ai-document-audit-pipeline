@@ -1,0 +1,30 @@
+[
+  {
+    "key": "documentType",
+    "value": "DOCUMENT"
+  },
+  {
+    "key": "documentDescription",
+    "value": "RG"
+  },
+  {
+    "key": "name",
+    "value": "JOSE DA SILVA"
+  },
+  {
+    "key": "socialName",
+    "value": null
+  },
+  {
+    "key": "birthDate",
+    "value": "1974-01-15"
+  },
+  {
+    "key": "document",
+    "value": "12345678-9 SP"
+  },
+  {
+    "key": "cpf",
+    "value": "12345678901"
+  }
+]
