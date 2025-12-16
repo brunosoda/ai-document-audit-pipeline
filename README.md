@@ -59,3 +59,36 @@ The pipeline is designed to be modular, auditable, and extensible.
 ├── examples/     # Sample input and output JSON files
 ├── architecture/ # Pipeline diagrams and documentation
 └── README.md
+
+
+
+
+ai-document-audit-pipeline/
+│
+├── README.md                
+├── architecture/
+│   └── pipeline_diagram.png
+│
+├── n8n/
+│   └── audit_pipeline_sanitized.json
+│
+├── sql/
+│   ├── extract_documents.sql
+│   ├── join_metadata.sql
+│   └── insert_audit_results.sql
+│
+├── src/
+│   ├── prompt/
+│   │   └── prompt_template.md
+│   │   └── prompt_template_pt.md
+│   ├── audit/
+│   │   └── audit_logic.js
+│   └── utils/
+│       └── validation.js
+│
+├── examples/
+│   ├── input_example.json
+│   └── output_example.json
+│
+├── requirements.txt
+└── .gitignore
