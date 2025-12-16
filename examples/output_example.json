@@ -1,0 +1,36 @@
+[
+  {
+    "audit_uuid": "11111111-1111-1111-1111-111111111111",
+    "model": "gpt-4o-2024-11-20",
+    "created_at": "2025-12-15T17:14:44.132Z",
+    "content": {
+      "conference_uuid": "11111111-1111-1111-1111-111111111111",
+      "criteria_descriptions": {
+        "is_invalid_image_quality": "A imagem apresenta boa qualidade, permitindo a leitura de todos os campos textuais e identificação facial.",
+        "is_wrong_document_type": "O documento exibido é um protocolo oficial brasileiro emitido pela Polícia Federal.",
+        "is_document_forged": "Não foram identificados sinais visíveis de edição ou manipulação digital no documento apresentado.",
+        "is_name_mismatch": "Nome na imagem: Jose da Silva. Nome inputado: JOSE DA SILVA. Não há mismatch de nomes.",
+        "is_document_number_mismatch": "Número na imagem: 11111111. Número inputado: 11111111-SP SP. Há mismatch de números devido à diferença entre '0' e 'O' e formatação inconsistente.",
+        "is_birthdate_mismatch": "Data de nascimento na imagem: 23/05/1991. Data de nascimento inputado: 1991-05-23. Não há mismatch de datas."
+      },
+      "approved_criteria": [
+        "is_invalid_image_quality",
+        "is_wrong_document_type",
+        "is_document_forged",
+        "is_name_mismatch",
+        "is_birthdate_mismatch"
+      ],
+      "reproved_criteria": [
+        "is_document_number_mismatch"
+      ],
+      "recommendations": {
+        "is_document_number_mismatch": "Envie um documento que possua uma formatação consistente no número, sem ambiguidade entre '0' e 'O'."
+      },
+      "labels": {
+        "is_digital": 1,
+        "is_there_qr_code": 1,
+        "is_folded": 0
+      }
+    }
+  }
+]
