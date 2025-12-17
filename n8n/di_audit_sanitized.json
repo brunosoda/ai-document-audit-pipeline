@@ -1,0 +1,3559 @@
+{
+  "name": "[sanitized] workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## GET SAMPLE",
+        "height": 464,
+        "width": 1168,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        848,
+        3344
+      ],
+      "typeVersion": 1,
+      "id": "ID_001",
+      "name": "Sticky Note9"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        944,
+        4112
+      ],
+      "id": "ID_002",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    c.tenant_id,\n    t.name AS tenant,\n    c.tenant_product AS product,\n    TO_CHAR(c.created_at::date, 'YYYY-MM-DD') AS validation_date,\n    COUNT(*) AS total_validations,\n    ROUND(COUNT(*) * 0.1) AS validation_count\nFROM app_conference.conferences c\nINNER JOIN app_conference.tenants t\n    ON c.tenant_id = t.id\nWHERE c.status_type = 'AUTOMATIC'\n  AND c.status IN ('APPROVED', 'REPROVED')\n  AND c.created_at::date = CURRENT_DATE - 1  -- dia anterior\nGROUP BY\n    c.tenant_id,\n    t.name,\n    c.tenant_product,\n    c.created_at::date\nORDER BY validation_date DESC;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1232,
+        3600
+      ],
+      "id": "ID_003",
+      "name": "query get_sample",
+      "credentials": {
+        "postgres": {
+          "id": "REDACTED",
+          "name": "POSTGRES_CREDENTIAL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DROP TABLE IF EXISTS tmp_conference_validations;\n\nCREATE TEMP TABLE tmp_conference_validations AS\nSELECT\n    conference_uuid,\n    COALESCE(\n        jsonb_agg(DISTINCT rule) FILTER (WHERE rule IS NOT NULL),\n        '[]'::jsonb\n    ) AS combined_rules,\n    validation_summary,\n    updated_at::date\nFROM app_conference.conference_validations cv\nLEFT JOIN LATERAL (\n    SELECT jsonb_array_elements(validation_request->'values') AS val\n) v ON TRUE\nLEFT JOIN LATERAL (\n    SELECT jsonb_array_elements_text(v.val->'result'->'reproved_rules') AS rule\n    UNION ALL\n    SELECT jsonb_array_elements_text(v.val->'result'->'manually_pending_rules') AS rule\n) r ON TRUE\nWHERE created_at::date = CURRENT_DATE - 1\nAND validation_name = 'final_validation'\nGROUP BY conference_uuid, validation_summary, status, status_type, updated_at::date;\n\nSELECT\n  c.uuid,\n  c.tenant_id,\n  t.name AS tenant,\n  c.tenant_product AS product,\n  TO_CHAR(c.created_at::date, 'YYYY-MM-DD') AS validation_date,\n  c.uploads,\n  c.raw_input_data,\n  c.created_at,\n  tmp.combined_rules\nFROM app_conference.conferences c\nINNER JOIN app_conference.tenants t ON c.tenant_id = t.id\nLEFT JOIN pg_temp.tmp_conference_validations tmp ON c.uuid = tmp.conference_uuid\nWHERE c.status_type = 'AUTOMATIC'\n  AND c.status IN ('APPROVED','REPROVED')\n  AND c.tenant_id = {{ $json.tenant_id }}\n  AND c.tenant_product = '{{ $json.product }}'\n  AND c.created_at::date = '{{ $json.validation_date }}'::date\nORDER BY RANDOM()\nLIMIT {{ $json.validation_count }};",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1488,
+        3600
+      ],
+      "id": "ID_004",
+      "name": "query get_cases",
+      "credentials": {
+        "postgres": {
+          "id": "REDACTED",
+          "name": "POSTGRES_CREDENTIAL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schema": {
+          "__rl": true,
+          "value": "app_audit",
+          "mode": "list",
+          "cachedResultName": "app_audit"
+        },
+        "table": {
+          "__rl": true,
+          "value": "audit_report_counts",
+          "mode": "list",
+          "cachedResultName": "audit_report_counts"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "tenant_id": "={{ $json.tenant_id }}",
+            "validation_date": "={{ $json.validation_date }}",
+            "validation_count": "={{ $json.validation_count }}",
+            "is_processed": false,
+            "tenant": "={{ $json.tenant }}",
+            "product": "={{ $json.product }}",
+            "validation_total": "={{ $json.total_validations }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "ID_005",
+              "displayName": "tenant_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ID_006",
+              "displayName": "tenant",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ID_007",
+              "displayName": "product",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ID_008",
+              "displayName": "validation_date",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ID_009",
+              "displayName": "validation_total",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ID_010",
+              "displayName": "validation_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ID_011",
+              "displayName": "is_processed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1488,
+        3408
+      ],
+      "id": "ID_012",
+      "name": "Insert in audit_report_counts",
+      "credentials": {
+        "postgres": {
+          "id": "REDACTED",
+          "name": "POSTGRES_CREDENTIAL"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "schema": {
+          "__rl": true,
+          "value": "app_audit",
+          "mode": "list",
+          "cachedResultName": "app_audit"
+        },
+        "table": {
+          "__rl": true,
+          "value": "audit_report_cases",
+          "mode": "list",
+          "cachedResultName": "audit_report_cases"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "conference_uuid": "={{ $json.uuid }}",
+            "tenant_id": "={{ $json.tenant_id }}",
+            "tenant": "={{ $json.tenant }}",
+            "product": "={{ $json.product }}",
+            "validation_date": "={{ $json.validation_date }}",
+            "uploads": "={{ $json.uploads }}",
+            "raw_input_data": "={{ $json.raw_input_data }}",
+            "combined_rules": "={{ $json.combined_rules }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "ID_013",
+              "displayName": "conference_uuid",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ID_005",
+              "displayName": "tenant_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ID_006",
+              "displayName": "tenant",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ID_007",
+              "displayName": "product",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ID_008",
+              "displayName": "validation_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ID_014",
+              "displayName": "uploads",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "object",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ID_015",
+              "displayName": "raw_input_data",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "object",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ID_016",
+              "displayName": "conference_summary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "object",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "ID_017",
+              "displayName": "audit_uuid",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ID_018",
+              "displayName": "di_reproved_criteria",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "array",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "ID_019",
+              "displayName": "di_audit_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "ID_020",
+              "displayName": "di_accuracy",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "ID_021",
+              "displayName": "di_is_processed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "ID_022",
+              "displayName": "selfie_reproved_criteria",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "array",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "ID_023",
+              "displayName": "selfie_audit_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "ID_024",
+              "displayName": "selfie_audit_by",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "ID_025",
+              "displayName": "selfie_accuracy",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "ID_026",
+              "displayName": "selfie_is_processed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "ID_027",
+              "displayName": "sc_reproved_criteria",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "array",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "ID_028",
+              "displayName": "sc_audit_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "ID_029",
+              "displayName": "sc_accuracy",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "ID_030",
+              "displayName": "sc_is_processed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "ID_031",
+              "displayName": "is_all_processed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "ID_032",
+              "displayName": "combined_rules",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "array",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1744,
+        3408
+      ],
+      "id": "ID_033",
+      "name": "Insert in audit_report_cases",
+      "credentials": {
+        "postgres": {
+          "id": "REDACTED",
+          "name": "POSTGRES_CREDENTIAL"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 3
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        1008,
+        3600
+      ],
+      "id": "ID_034",
+      "name": "Scheduled 4am",
+      "notesInFlow": true,
+      "notes": "4am daily"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    conference_uuid,\n    audit_uuid,\n    validation_date,\n    combined_rules,\n    di_reproved_criteria\nFROM app_audit.di_cases_accuracy\nWHERE validation_date >= CURRENT_DATE - 7\nAND validation_date < CURRENT_DATE",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2336,
+        4368
+      ],
+      "id": "ID_035",
+      "name": "get1",
+      "notesInFlow": true,
+      "credentials": {
+        "postgres": {
+          "id": "REDACTED",
+          "name": "POSTGRES_CREDENTIAL"
+        }
+      },
+      "notes": "di_is_processed"
+    },
+    {
+      "parameters": {
+        "schema": {
+          "__rl": true,
+          "value": "app_audit",
+          "mode": "list",
+          "cachedResultName": "app_audit"
+        },
+        "table": {
+          "__rl": true,
+          "value": "di_prompt_versions",
+          "mode": "list",
+          "cachedResultName": "di_prompt_versions"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "prompt_id": "={{ $('previous prompt1').item.json.prompt_id + 1 }}",
+            "prompt": "={{$('which prompt').item.json.promptTemplate}}",
+            "model_name": "gpt-4o-2024-11-20"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "ID_036",
+              "displayName": "prompt_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ID_037",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ID_038",
+              "displayName": "prompt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ID_039",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ID_040",
+              "displayName": "model_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ID_041",
+              "displayName": "accuracy",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2864,
+        5392
+      ],
+      "id": "ID_042",
+      "name": "Insert new prompt1",
+      "notesInFlow": true,
+      "credentials": {
+        "postgres": {
+          "id": "REDACTED",
+          "name": "POSTGRES_CREDENTIAL"
+        }
+      },
+      "notes": "in prompt_versions"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ✅ Tenta localizar o array de documentos automaticamente\nlet docs = [];\n\nif (Array.isArray(items) && items.length > 0) {\n  const first = items[0].json;\n  if (Array.isArray(first.data)) {\n    docs = first.data;\n  } else if (Array.isArray(first)) {\n    docs = first;\n  } else {\n    // Se os itens já forem o array, usa-os diretamente\n    docs = items.map(i => i.json);\n  }\n}\n\nif (!Array.isArray(docs) || docs.length === 0) {\n  throw new Error(\"Nenhum array de documentos encontrado. Verifique se os dados estão em items[0].json.data ou diretamente nos items.\");\n}\n\n// ✅ Lista dos 7 critérios\nconst criterios = [\n  \"is_invalid_image_quality\",\n  \"is_wrong_document_type\",\n//  \"is_invalid_data_extraction\",\n  \"is_document_forged\",\n  \"is_name_mismatch\",\n  \"is_document_number_mismatch\",\n  \"is_birthdate_mismatch\"\n];\n\n// ✅ Inicializa contadores\nconst metrics = {};\nfor (const c of criterios) {\n  metrics[c] = { TP: 0, TN: 0, FP: 0, FN: 0 };\n}\n\n// ✅ Percorre cada documento\nfor (const doc of docs) {\n  const verdadeiros = new Set(doc.di_reproved_criteria || []);\n  const avaliados = new Set(doc.combined_rules || []);\n\n  for (const criterio of criterios) {\n    const real = verdadeiros.has(criterio);  // ground truth\n    const modelo = avaliados.has(criterio);  // predição\n\n    if (real && modelo) metrics[criterio].TP++;\n    else if (!real && !modelo) metrics[criterio].TN++;\n    else if (!real && modelo) metrics[criterio].FP++;\n    else if (real && !modelo) metrics[criterio].FN++;\n  }\n}\n\n// ✅ Calcula acurácia\nconst resultados = [];\nfor (const criterio of criterios) {\n  const { TP, TN, FP, FN } = metrics[criterio];\n  const total = TP + TN + FP + FN;\n  const acc = total > 0 ? (TP + TN) / total : 0;\n\n  resultados.push({\n    criterio,\n    TP,\n    TN,\n    FP,\n    FN,\n    acuracia: Number(acc.toFixed(2))\n  });\n}\n\nreturn [{ json: { resultados } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2496,
+        4368
+      ],
+      "id": "ID_043",
+      "name": "accuracies calculation",
+      "notesInFlow": true,
+      "notes": "by criteria"
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "schema": {
+          "__rl": true,
+          "value": "app_audit",
+          "mode": "list",
+          "cachedResultName": "app_audit"
+        },
+        "table": {
+          "__rl": true,
+          "value": "audit_report_cases",
+          "mode": "list",
+          "cachedResultName": "audit_report_cases"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "conference_uuid": "={{ $json.conference_uuid }}",
+            "di_reproved_criteria": "={{ $json.reproved_criteria }}",
+            "di_audit_at": "={{ $json.created_at }}",
+            "di_is_processed": true
+          },
+          "matchingColumns": [
+            "conference_uuid"
+          ],
+          "schema": [
+            {
+              "id": "ID_013",
+              "displayName": "conference_uuid",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ID_005",
+              "displayName": "tenant_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": false,
+              "removed": true
+            },
+            {
+              "id": "ID_006",
+              "displayName": "tenant",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false,
+              "removed": true
+            },
+            {
+              "id": "ID_007",
+              "displayName": "product",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false,
+              "removed": true
+            },
+            {
+              "id": "ID_008",
+              "displayName": "validation_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": false,
+              "removed": true
+            },
+            {
+              "id": "ID_014",
+              "displayName": "uploads",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "object",
+              "canBeUsedToMatch": false,
+              "removed": true
+            },
+            {
+              "id": "ID_015",
+              "displayName": "raw_input_data",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "object",
+              "canBeUsedToMatch": false,
+              "removed": true
+            },
+            {
+              "id": "ID_017",
+              "displayName": "audit_uuid",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false,
+              "removed": true
+            },
+            {
+              "id": "ID_018",
+              "displayName": "di_reproved_criteria",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "array",
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "ID_019",
+              "displayName": "di_audit_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "ID_044",
+              "displayName": "di_is_reprocessed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": false,
+              "removed": true
+            },
+            {
+              "id": "ID_021",
+              "displayName": "di_is_processed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "ID_022",
+              "displayName": "selfie_reproved_criteria",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "array",
+              "canBeUsedToMatch": false,
+              "removed": true
+            },
+            {
+              "id": "ID_023",
+              "displayName": "selfie_audit_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": false,
+              "removed": true
+            },
+            {
+              "id": "ID_024",
+              "displayName": "selfie_audit_by",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false,
+              "removed": true
+            },
+            {
+              "id": "ID_025",
+              "displayName": "selfie_accuracy",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": false,
+              "removed": true
+            },
+            {
+              "id": "ID_026",
+              "displayName": "selfie_is_processed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": false,
+              "removed": true
+            },
+            {
+              "id": "ID_027",
+              "displayName": "sc_reproved_criteria",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "array",
+              "canBeUsedToMatch": false,
+              "removed": true
+            },
+            {
+              "id": "ID_028",
+              "displayName": "sc_audit_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": false,
+              "removed": true
+            },
+            {
+              "id": "ID_029",
+              "displayName": "sc_accuracy",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": false,
+              "removed": true
+            },
+            {
+              "id": "ID_030",
+              "displayName": "sc_is_processed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": false,
+              "removed": true
+            },
+            {
+              "id": "ID_031",
+              "displayName": "is_all_processed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": false,
+              "removed": true
+            },
+            {
+              "id": "ID_032",
+              "displayName": "combined_rules",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "array",
+              "canBeUsedToMatch": false,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2576,
+        3936
+      ],
+      "id": "ID_045",
+      "name": "Update in audit_report_cases",
+      "notesInFlow": true,
+      "credentials": {
+        "postgres": {
+          "id": "REDACTED",
+          "name": "POSTGRES_CREDENTIAL"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Audit data into cases table"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT *\nFROM app_audit.audit_report_cases ARC\nRIGHT JOIN app_audit.di_audit_results R\nON ARC.conference_uuid = R.conference_uuid\nWHERE di_is_processed IS NULL",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2416,
+        3936
+      ],
+      "id": "ID_046",
+      "name": "get audit results",
+      "notesInFlow": false,
+      "credentials": {
+        "postgres": {
+          "id": "REDACTED",
+          "name": "POSTGRES_CREDENTIAL"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "pega todos os casos em que já teve analise do gpt mas que na tabela de cases, ainda não estão atualizados"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        2272,
+        3936
+      ],
+      "id": "ID_047",
+      "name": "Aggregate16"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        3056,
+        5392
+      ],
+      "id": "ID_048",
+      "name": "Aggregate15"
+    },
+    {
+      "parameters": {
+        "schema": {
+          "__rl": true,
+          "value": "app_audit",
+          "mode": "list",
+          "cachedResultName": "app_audit"
+        },
+        "table": {
+          "__rl": true,
+          "value": "di_audit_results",
+          "mode": "list",
+          "cachedResultName": "di_audit_results"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "prompt_id": "={{ $('previous prompt1').item.json.prompt_id + 1 }}",
+            "audit_uuid": "={{ $('Parser llm response').item.json.audit_uuid }}",
+            "conference_uuid": "={{ $('Parser llm response').item.json.content.conference_uuid }}",
+            "criteria_descriptions": "={{ $('Parser llm response').item.json.content.criteria_descriptions }}",
+            "approved_criteria": "={{ $('Parser llm response').item.json.content.approved_criteria }}",
+            "reproved_criteria": "={{ $('Parser llm response').item.json.content.reproved_criteria }}",
+            "recommendations": "={{ $('Parser llm response').item.json.content.recommendations }}",
+            "labels": "={{ $('Parser llm response').item.json.content.labels }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "ID_017",
+              "displayName": "audit_uuid",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ID_013",
+              "displayName": "conference_uuid",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ID_049",
+              "displayName": "criteria_descriptions",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "object",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ID_050",
+              "displayName": "approved_criteria",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "array",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ID_051",
+              "displayName": "reproved_criteria",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "array",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ID_052",
+              "displayName": "recommendations",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "object",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ID_053",
+              "displayName": "labels",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "object",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ID_037",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ID_036",
+              "displayName": "prompt_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        3216,
+        5392
+      ],
+      "id": "ID_054",
+      "name": "Insert in results",
+      "credentials": {
+        "postgres": {
+          "id": "REDACTED",
+          "name": "POSTGRES_CREDENTIAL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "schema": {
+          "__rl": true,
+          "value": "app_audit",
+          "mode": "list",
+          "cachedResultName": "app_audit"
+        },
+        "table": {
+          "__rl": true,
+          "value": "di_openai_raw_content",
+          "mode": "list",
+          "cachedResultName": "di_openai_raw_content"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "audit_uuid": "={{ $('If2').item.json.audit_uuid }}",
+            "content": "={{ $json.content }}",
+            "model": "gpt-4o-2024-11-20"
+          },
+          "matchingColumns": [
+            "audit_uuid"
+          ],
+          "schema": [
+            {
+              "id": "ID_017",
+              "displayName": "audit_uuid",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ID_055",
+              "displayName": "model",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "ID_056",
+              "displayName": "content",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "ID_037",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2016,
+        5392
+      ],
+      "id": "ID_057",
+      "name": "Insert in openai_raw_content",
+      "credentials": {
+        "postgres": {
+          "id": "REDACTED",
+          "name": "POSTGRES_CREDENTIAL"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pega o conteúdo e remove blocos de markdown tipo ```json ... ```\nlet cleanedContent = $input.first().json.content || '';\ncleanedContent = cleanedContent.replace(/```json|```/g, '').trim();\n\nlet parsedContent;\n\ntry {\n  parsedContent = JSON.parse(cleanedContent);\n} catch (error) {\n  // Se não for JSON válido, retorna como texto mesmo pra debugar\n  parsedContent = { parse_error: true, raw: cleanedContent, message: error.message };\n}\n\n// Acessa as outras chaves\nconst item = $input.first().json;\nconst auditUuid = item.audit_uuid;\nconst model = item.model;\nconst createdAt = item.created_at;\n\n// Retorna todos os dados necessários\nreturn [\n  {\n    json: {\n      audit_uuid: auditUuid,\n      model: model,\n      created_at: createdAt,\n      content: parsedContent\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2176,
+        5392
+      ],
+      "id": "ID_058",
+      "name": "Parser llm response"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Loop').item.json.url_optimized }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3248,
+        5040
+      ],
+      "id": "ID_059",
+      "name": "HTTP GET",
+      "notesInFlow": true,
+      "onError": "continueRegularOutput",
+      "notes": "get optimized url"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1840,
+        4960
+      ],
+      "id": "ID_060",
+      "name": "Loop"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    ARC.conference_uuid,\n    ARC.audit_uuid,\n    ARC.tenant_id,\n    ARC.tenant,\n    ARC.product,\n    ARC.validation_date,\n    -- Monta a nova URL com \"_optimized.jpg\" antes de \"&conference_uuid=\"\n    LEFT(CD.orignal_url, POSITION('&conference_uuid=' IN CD.orignal_url) - 1)\n        || '_optimized.jpg'\n        || SUBSTRING(CD.orignal_url FROM POSITION('&conference_uuid=' IN CD.orignal_url))\n        AS url_optimized,\n    ARC.raw_input_data,\n    ARC.combined_rules,\n    elem ->> 'value' AS di_type\nFROM app_audit.audit_report_cases ARC\nLEFT JOIN app_conference.conference_documents CD ON ARC.conference_uuid = CD.conference_uuid\nCROSS JOIN LATERAL jsonb_array_elements(ARC.raw_input_data::jsonb -> 'userInfos' -> 'DOCUMENT') elem\nWHERE length(file_path_optimized) > 5\nAND ARC.validation_date = CURRENT_DATE - 1\nAND CD.type = 'DOCUMENT_FRONT'\nAND elem ->> 'key' = 'documentDescription'\nAND ARC.di_reproved_criteria IS NULL\nORDER BY random()\nLIMIT 50;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1248,
+        4960
+      ],
+      "id": "ID_061",
+      "name": "get_cases",
+      "credentials": {
+        "postgres": {
+          "id": "REDACTED",
+          "name": "POSTGRES_CREDENTIAL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schema": {
+          "__rl": true,
+          "value": "app_audit",
+          "mode": "list",
+          "cachedResultName": "app_audit"
+        },
+        "table": {
+          "__rl": true,
+          "value": "di_audit_results",
+          "mode": "list",
+          "cachedResultName": "di_audit_results"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "audit_uuid": "={{ $('Parser llm response').item.json.audit_uuid }}",
+            "conference_uuid": "={{ $('Parser llm response').item.json.content.conference_uuid }}",
+            "criteria_descriptions": "={{ $('Parser llm response').item.json.content.criteria_descriptions }}",
+            "approved_criteria": "={{ $('Parser llm response').item.json.content.approved_criteria }}",
+            "reproved_criteria": "={{ $('Parser llm response').item.json.content.reproved_criteria }}",
+            "recommendations": "={{ $('Parser llm response').item.json.content.recommendations }}",
+            "labels": "={{ $('Parser llm response').item.json.content.labels }}",
+            "prompt_id": "={{ $('previous prompt1').item.json.prompt_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "ID_017",
+              "displayName": "audit_uuid",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ID_013",
+              "displayName": "conference_uuid",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ID_049",
+              "displayName": "criteria_descriptions",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "object",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ID_050",
+              "displayName": "approved_criteria",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "array",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ID_051",
+              "displayName": "reproved_criteria",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "array",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ID_052",
+              "displayName": "recommendations",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "object",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ID_053",
+              "displayName": "labels",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "object",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ID_037",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ID_036",
+              "displayName": "prompt_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2864,
+        5600
+      ],
+      "id": "ID_062",
+      "name": "Insert in results2",
+      "credentials": {
+        "postgres": {
+          "id": "REDACTED",
+          "name": "POSTGRES_CREDENTIAL"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "content": "## AUDIT MAIN WORKFLOW",
+        "height": 512,
+        "width": 2896,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        848,
+        4768
+      ],
+      "typeVersion": 1,
+      "id": "ID_063",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT arc.*\nFROM app_audit.audit_report_cases arc\nLEFT JOIN app_audit.di_cases_accuracy dca\n    ON arc.conference_uuid = dca.conference_uuid\nWHERE arc.di_reproved_criteria IS NOT NULL\nAND dca.conference_uuid IS NULL;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2336,
+        4160
+      ],
+      "id": "ID_064",
+      "name": "get2",
+      "notesInFlow": true,
+      "credentials": {
+        "postgres": {
+          "id": "REDACTED",
+          "name": "POSTGRES_CREDENTIAL"
+        }
+      },
+      "notes": "di_is_processed"
+    },
+    {
+      "parameters": {
+        "jsCode": "const validCriteria = [\n  \"is_invalid_image_quality\",\n  \"is_wrong_document_type\",\n//  \"is_invalid_data_extraction\",\n  \"is_document_forged\",\n  \"is_name_mismatch\",\n  \"is_document_number_mismatch\",\n  \"is_birthdate_mismatch\"\n];\n\nreturn items.map(item => {\n  const data = { ...item.json };\n\n  const normalize = (arr) => {\n    if (!Array.isArray(arr)) return [];\n    return arr\n      .filter(rule => /^di:/.test(rule))             // mantém apenas itens que começam com \"di:\"\n      .map(rule => rule.replace(/^di:/, \"\"))         // remove o prefixo \"di:\"\n      .filter(rule => validCriteria.includes(rule)); // mantém apenas critérios válidos\n  };\n\n  // Normaliza combined_rules e di_reproved_criteria\n  const combinedNormalized = normalize(data.combined_rules);\n\n  // Atualiza valores normalizados\n  data.combined_rules = combinedNormalized;\n\n  return { json: data };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2512,
+        4160
+      ],
+      "id": "ID_065",
+      "name": "standardizes reproved fields1",
+      "notesInFlow": true,
+      "notes": "Data harmonization"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        3056,
+        4160
+      ],
+      "id": "ID_066",
+      "name": "Aggregate2"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- QUANTIDADE DE CASOS POR ACCURACY\nSELECT\n    accuracy,\n    COUNT(*) AS count,\n    ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 2) AS percentage\nFROM app_audit.di_cases_accuracy\nWHERE validation_date >= CURRENT_DATE - 7\nGROUP BY accuracy\nORDER BY accuracy DESC;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        3856,
+        3968
+      ],
+      "id": "ID_067",
+      "name": "Execute a SQL query2",
+      "credentials": {
+        "postgres": {
+          "id": "REDACTED",
+          "name": "POSTGRES_CREDENTIAL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Critérios fixos (8)\nconst CRITERIA = [\n  \"is_invalid_image_quality\",\n  \"is_wrong_document_type\",\n//  \"is_invalid_data_extraction\",\n  \"is_document_forged\",\n  \"is_name_mismatch\",\n  \"is_document_number_mismatch\",\n  \"is_birthdate_mismatch\"\n];\n\n// Dados de entrada (cada item do n8n representa um documento)\nconst data = items.map(item => item.json);\n\nconst results = [];\n\nfor (const record of data) {\n  const combined = new Set(record.combined_rules || []);\n  const truth = new Set(record.di_reproved_criteria || []);\n\n  let TP = 0, TN = 0, FP = 0, FN = 0;\n\n  // percorre todos os critérios\n  for (const criterion of CRITERIA) {\n    const predicted = combined.has(criterion);\n    const actual = truth.has(criterion);\n\n    if (actual && predicted) TP++;\n    else if (!actual && !predicted) TN++;\n    else if (!actual && predicted) FP++;\n    else if (actual && !predicted) FN++;\n  }\n\n  // total = 8 sempre\n  const total = CRITERIA.length;\n  const accuracy = (TP + TN) / total;\n\n  results.push({\n    conference_uuid: record.conference_uuid,\n    audit_uuid: record.audit_uuid,\n    validation_date: record.validation_date,\n    di_reproved_criteria: Array.from(truth),\n    combined_rules: Array.from(combined),\n    TP,\n    TN,\n    FP,\n    FN,\n    accuracy: Number(accuracy.toFixed(4))\n  });\n}\n\n// Retorna uma linha por documento\nreturn results.map(r => ({ json: r }));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2704,
+        4160
+      ],
+      "id": "ID_068",
+      "name": "accuracies calculation1",
+      "notesInFlow": true,
+      "notes": "by case"
+    },
+    {
+      "parameters": {
+        "jsCode": "// --- ENTRADA ---\nconst xRaw = $('If2').first().json.di_type_optimized; \nconst x = xRaw.toUpperCase();\n\n// Pega o JSON do nó anterior\nconst data = items[0].json;\n\n// Garante que sempre tenhamos o objeto de documentos (se vier array ou objeto)\nconst documents = Array.isArray(data) ? data[0] : data;\n\nlet key;\n\n// Detecta o tipo de documento\nif (x.includes('RG')) {\n  key = 'RG';\n} else if (x.includes('CNH')) {\n  key = 'CNH';\n} else if (x.includes('CIN')) {\n  key = 'CIN';\n}\n\nif (!key) {\n  throw new Error(`Tipo de documento não reconhecido: ${xRaw}. Esperado: RG, CNH ou CIN.`);\n}\n\n// Busca os dados do documento correspondente\nconst docData = documents[key];\n\nif (!docData) {\n  throw new Error(`Dados não encontrados para o tipo: ${key}.`);\n}\n\n// --- SAÍDA ---\nreturn [\n  {\n    json: {\n      key,\n      data: docData\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2368,
+        4864
+      ],
+      "id": "ID_069",
+      "name": "which di"
+    },
+    {
+      "parameters": {
+        "resource": "image",
+        "operation": "analyze",
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-2024-11-20",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-2024-11-20"
+        },
+        "text": "={{ $('which prompt').item.json.promptFinal }}",
+        "inputType": "base64",
+        "options": {
+          "detail": "low",
+          "maxTokens": 1000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        3536,
+        5040
+      ],
+      "id": "ID_070",
+      "name": "zero shot",
+      "credentials": {
+        "openAiApi": {
+          "id": "REDACTED",
+          "name": "OPENAIAPI_CREDENTIAL"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ID_071",
+              "name": "CNH",
+              "value": "{\n  \"document_type\": \"CNH\",\n  \"fields\": {\n    \"name\": {\n      \"color\": \"red\",\n      \"alias\": [\n        \"NOME\",\n        \"2 e 1 NOME E SOBRENOME\"\n      ],\n      \"example_values\": [\n        \"MAYRA CAMPOS FERNANDES\",\n        \"JOÃO DA SILVA\",\n        \"ANA PAULA MENDES\"\n      ],\n      \"instructions\": \"O nome está sempre dentro da área destacada em vermelho, localizada no topo do documento, à direita do mapa do Brasil e acima da foto.\"\n    },\n    \"birthdate\": {\n      \"color\": \"blue\",\n      \"alias\": [\n        \"3 DATA, LOCAL E UF DE NASCIMENTO\",\n        \"DATA NASCIMENTO\"\n      ],\n      \"example_values\": [\n        \"19/02/1993\",\n        \"24/08/1987\",\n        \"11/05/2001\"\n      ],\n      \"instructions\": \"A data de nascimento está sempre dentro da área azul, abaixo do nome e à direita da foto. Se houver localidade junto, extraia apenas a data principal.\"\n    },\n    \"number\": {\n      \"color\": \"green\",\n      \"alias\": [\n        \"4c DOC IDENTIDADE / ÓRG. EMISSOR / UF\",\n        \"DOC. IDENTIDADE / ÓRG. EMISSOR / UF\"\n      ],\n      \"example_values\": [\n        \"1234567\",\n        \"12345678\",\n        \"MG12345678\",\n        \"123456789\",\n        \"1234567890\",\n        \"00000000000\",\n        \"00000000000\"\n      ],\n      \"instructions\": \"O número do documento aparece dentro da área verde, à direita da foto. Ignore qualquer dígito verificador ou separador final.\"\n    }\n  }\n}",
+              "type": "object"
+            },
+            {
+              "id": "ID_072",
+              "name": "RG",
+              "value": "{\n  \"document_type\": \"RG\",\n  \"name\": {\n    \"name_label\": [\n      \"NOME\"\n    ],\n    \"name_value_example\": [\n      \"BRUNO KENJI SODA\",\n      \"Bruno Kenji Soda\"\n    ],\n    \"name_layout\": \"O nome fica no topo do documento.\"\n  },\n  \"birthdate\": {\n    \"birthdate_label\": [\n      \"DATA NASCIMENTO\",\n      \"DATA NASC.\",\n      \"DATA DE NASCIMENTO\"\n    ],\n    \"birthdate_value_example\": [\n      \"22/05/1973\"\n    ],\n    \"birthdate_layout\": [\n      \"Modelo antigo: a data de nascimento fica no meio da página, à direita, na página sem foto.\",\n      \"Modelo novo: a data fica no meio da página, à direita da foto, na página com foto.\"\n    ]\n  },\n  \"number\": {\n    \"number_label\": [\n      \"REGISTRO GERAL\"\n    ],\n    \"number_value_example\": [\n      \"123456-7\",\n      \"1234567\",\n      \"1.234.567\",\n      \"1.234.567 - ES\",\n      \"1234567-8\",\n      \"1.234.567-8\",\n      \"MG-12.345.678\",\n      \"12.345.678-9\",\n      \"123.456.789\",\n      \"1234567890\",\n      \"123456789-0\",\n      \"12.345.678-90\",\n      \"000.000.000-00\",\n      \"00000000000-3\"\n    ],\n    \"number_layout\": \"O número do RG fica no topo da página sem foto.\"\n  }\n}",
+              "type": "object"
+            },
+            {
+              "id": "ID_073",
+              "name": "CIN",
+              "value": "{\n  \"document_type\": \"CIN\",\n  \"name\": {\n    \"name_label\": [\n      \"Nome / Name\"\n    ],\n    \"name_value_example\": [\n      \"IRIS MARIA DOS SANTOS ARAUJO\"\n    ],\n    \"name_layout\": \"O nome fica à direita da foto.\"\n  },\n  \"birthdate\": {\n    \"birthdate_label\": [\n      \"Data de Nascimento / Data of Birth\"\n    ],\n    \"birthdate_value_example\": [\n      \"24/09/2000\"\n    ],\n    \"birthdate_layout\": \"A data de nascimento fica à direita da foto.\"\n  },\n  \"number\": {\n    \"number_label\": [\n      \"Registro Geral - CPF / Personal Number\"\n    ],\n    \"number_value_example\": [\n      \"000.000.000-00\"\n    ],\n    \"number_layout\": \"O número do registro fica à direita da foto.\"\n  }\n}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2224,
+        4864
+      ],
+      "id": "ID_074",
+      "name": "few_shot"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ID_075",
+              "name": "few_shot",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2288,
+        5040
+      ],
+      "id": "ID_076",
+      "name": "zero shot1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// === 📥 Entrada ===\n// Tenta capturar o campo 'data' do nó anterior\nlet few_shot;\n\ntry {\n  few_shot = $input.first().json.data ?? '';\n} catch (error) {\n  few_shot = '';\n}\n\n// === 🧱 Garante que seja string ===\nif (typeof few_shot !== 'string') {\n  try {\n    few_shot = JSON.stringify(few_shot, null, 2);\n  } catch (e) {\n    few_shot = '';\n  }\n}\n\n// === 🧩 Monta o texto somente se houver conteúdo ===\nlet few_shot_text = '';\n\nif (few_shot && few_shot.trim() !== '') {\n  few_shot_text = `\n---\n\n## Few-Shot de Referência\n\nA seguir estão exemplos com rótulos, valores e layouts de documentos brasileiros.  \nUse este few-shot como referência de padrões válidos, variações de texto e posições típicas dos campos (nome, data de nascimento e número).  \nO modelo deve comparar os rótulos e formatos da imagem com estes exemplos para identificar o tipo de documento e validar os dados.\n\n\\`\\`\\`json \n${few_shot}\n\\`\\`\\`\n`;\n}\n\n// === ✅ Retorno (incluindo binários) ===\nreturn [\n  {\n    json: {\n      few_shot_text\n    },\n    binary: $input.first().binary  // 🔥 preserva TODOS os binários\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2544,
+        5040
+      ],
+      "id": "ID_077",
+      "name": "few_shot_text",
+      "notesInFlow": true,
+      "notes": "if exists"
+    },
+    {
+      "parameters": {
+        "jsCode": "// === 🧠 VARIÁVEIS DE CONTEXTO ===\nconst vars = {\n  conference_uuid_js: $('Loop').first().json.conference_uuid,\n  name_js: $('Loop').first().json.raw_input_data.userInfos.DOCUMENT[2]?.value ?? '',\n  birthdate_js: $('Loop').first().json.raw_input_data.userInfos.DOCUMENT[4]?.value ?? '',\n  document_js: $('Loop').first().json.raw_input_data.userInfos.DOCUMENT[5]?.value ?? '',\n  cpf_js: $('Loop').first().json.raw_input_data.userInfos.DOCUMENT[6]?.value ?? ''\n};\n\n// === 📥 Captura o few_shot_text do nó anterior ===\nlet few_shot_text = '';\ntry {\n  few_shot_text = $input.first().json.few_shot_text ?? '';\n} catch (error) {\n  few_shot_text = '';\n}\n\n// === 🧱 TEMPLATE ===\nconst promptTemplate = `\nVocê é um Analista Forense Sênior em auditoria de documentos oficiais brasileiros.\nSua função é realizar avaliações técnicas de alto rigor, destinadas à verificação de autenticidade, consistência de dados e conformidade visual de documentos oficiais (RG, CIN, CNH, RNE e passaporte).\n\nVocê deve atuar com postura pericial, descrevendo apenas o que está visível na imagem, sem suposições, inferências ou interpretações subjetivas.\n\nSua avaliação deve seguir estritamente o protocolo estabelecido e retornar exclusivamente o JSON final, no formato definido, garantindo consistência, precisão e aderência total às regras do sistema.\n\nAntes de iniciar qualquer avaliação ou comparação, dê um passo atrás (step-back) e estabeleça o contexto primário da imagem seguindo esta ordem obrigatória:\n\n1. Identifique o tipo de documento (RG, CNH, CIN, RNE, passaporte).\n2. Determine se o documento parece oficial e compatível com versões reais.\n3. Avalie se há indícios gerais de fraude digital ou manipulação evidente.\n\nSomente após definir esse contexto inicial, prossiga para as análises detalhadas de qualidade, layout e mismatch dos dados.\n\n{{few_shot_text}}\n\n---\n\n## Etapa de Anotação de Dados\n\nMarque 1 se true ou 0 se false de acordo com a imagem disponível para o seguinte:\n\n### \\`is_digital\\`\n1: se imagem não for uma foto de um documento físico de papel (exemplo: printscreen de arquivo digital).\n0: se imagem for uma foto do documento físico de papel.\n\n### \\`is_there_qr_code\\`\n1: somente quando imagem conter qr code.\n0: somente quando imagem não conter qr code.\n\n### \\`is_folded\\`\n1: quando o documento físico está dobrado ao meio, ou seja, a imagem mostra somente a frente ou somente o verso, e a outra metade não aparece. A ausência de vinco não significa que o documento está aberto — se só metade está visível, marque 1.\n0: quando o documento está aberto ou totalmente visível, mesmo que exista um vinco central indicando que já foi dobrado antes.\n\n## Etapa de Avaliação \n\nPara **cada critério técnico abaixo**, siga **duas etapas obrigatórias**: \n\n### 1. Descreva objetivamente o que há na imagem relacionado ao critério analisado. \n\n* Seja **claro, conciso e factual**, sem interpretar ou julgar neste momento. \n* A descrição deve se concentrar **apenas nos elementos presentes na imagem** relacionados ao critério específico. \n\n### 2. Avalie se o critério deve ser **aprovado ou reprovado**, com base nos subcasos definidos. \n\n* Se **reprovado**, forneça uma justificativa com base em pelo menos um dos subcasos e uma **recomendação objetiva** para correção. \n\n--- \n\n## Critérios Técnicos \n\n### \\`is_invalid_image_quality\\` \n\n1. **Descrição**: Verifique se há baixa resolução, desfoque, granulação, brilho excessivo, contraste inadequado, reflexos ou interferências na foto 3x4 do documento ou nos dados textuais de campos obrigatórios. \n2. **Avaliação**: Reprove apenas quando impossível identificar pessoa ou ler dados textuais de campos obrigatórios. \n\n### \\`is_wrong_document_type\\` \n\n1. **Descrição**: Identifique se a imagem contém um documento brasileiro oficial de identificação (RG, CNH, RNE ou passaporte). \n2. **Avaliação**: Reprove se a imagem não contém qualquer um dos documentos oficiais presente. \n\n### \\`is_document_forged\\`  \n\n1. **Descrição**: Observe sinais de edição digital: colagens, cortes, fontes diferentes, cores irregulares, selos desalinhados, bordas duplicadas, layout incompatível.\n2. **Avaliação**: Reprovar apenas se houver evidência clara de fraude digital (desgaste físico não conta).\n\n### \\`is_name_mismatch\\` \n1. **Descrição**: Verifique se o nome da pessoa no documento de identificação é o mesmo que {{name_js}}. Não usar nomes de filiação ou em assinatura para validar.\n2. **Avaliação**: Reprove se não for igual ou não existir(em). Acentuações, espaços duplos e case sensitive não tem problema. \n\n### \\`is_document_number_mismatch\\` \n\n1. **Descrição**: Verifique na imagem se o número do CPF é igual a {{cpf_js}}. \n2. **Avaliação**: Reprove se todos os números não forem os mesmos ou não existir(em). Pontos, hífen, espaços duplos e case sensitive não tem problema. \n\n### \\`is_birthdate_mismatch\\` \n\n1. **Descrição**: Verifique se a data de nascimento no documento é a mesma que {{birthdate_js}}. \n2. **Avaliação**: Reprove se as datas não forem as mesmas ou não existir(em). Não levar em consideração o formato da data e espaços duplos. \n\n--- \n\n## Instruções de Resposta \n\n> Responda apenas com JSON **sem usar blocos de código, sem backticks, sem \\`\\`\\`json**, sem texto antes ou depois. \n> **Proibições:** não inclua comentários, texto fora do JSON, campos adicionais ou chaves vazias. \n> \n> **REGRAS OBRIGATÓRIAS DE CONSISTÊNCIA:** \n> \n> 1. Os critérios técnicos devem ser respondidos e retornados na ordem apresentada: is_invalid_image_quality, is_wrong_document_type, is_document_forged, is_name_mismatch, is_document_number_mismatch, is_birthdate_mismatch.\n> 2. \\`approved_criteria\\` e \\`reproved_criteria\\` **não podem** ter o mesmo critério simultaneamente. \n> 3. Para **cada** item em \\`reproved_criteria\\`, deve existir **exatamente uma** entrada correspondente em \\`recommendations\\` usando o **mesmo nome técnico** do critério. \n> 4. Em \\`criteria_descriptions\\`, descreva **objetivamente** o que foi observado **apenas** para os critérios pertinentes; cada descrição deve ser sucinta (1–3 frases). \n> 5. \\`conference_uuid\\` deve ser este: {{conference_uuid_js}}.\n> 6. \\`labels\\` é booleano, 1 para true e 0 para false.\n> \n> **Formato final:** o JSON **deve** ter exatamente as chaves \n> \\` conference _uuid\\`, \\`criteria_descriptions\\`, \\`approved_criteria\\`, \\`reproved_criteria\\`, \\`recommendations\\`, \\`labels\\`. \n> Responda SOMENTE em JSON puro e exatamente no formato especificado, \n> sem adicionar \\`\\`\\`json ou qualquer marcação de código. \n\n--- \n\n## Exemplo de Resposta\n\n\\`\\`\\`json \n{\n  \"conference_uuid\": \"{{conference_uuid_js}}\",\n  \"criteria_descriptions\": {\n    \"is_invalid_image_quality\": \"A imagem apresenta leve granulação, mas os traços faciais estão visíveis.\",\n    \"is_wrong_document_type\": \"O documento presente é um documento brasileiro oficial de identificação.\",\n    \"is_document_forged\": \"O documento presente é um documento brasileiro oficial de identificação.\",\n    \"is_name_mismatch\": \"Nome na imagem: José Carlos da Silva. Nome inputado: {{name_js}}. Tem mismatch de nomes\",\n    \"is_document_number_mismatch\": \"Número na imagem: 000.000.000-00. Número inputado: {{document_js}}. Não tem mismatch de números\",\n    \"is_birthdate_mismatch\": \"Data de nascimento na imagem: 01/01/1990. Data de nascimento inputado: {{birthdate_js}}. Tem mismatch de datas\"\n  },\n  \"approved_criteria\": [\"is_invalid_image_quality\", \"is_wrong_document_type\", \"is_document_forged\", \"is_document_number_mismatch\"], \n  \"reproved_criteria\": [\"is_name_mismatch\", \"is_birthdate_mismatch\"], \n  \"recommendations\": { \n    \"is_name_mismatch\": \"Envie uma imagem com o mesmo nome inputado\", \n    \"is_birthdate_mismatch\": \"Confira se o input está correto ou se a data de nascimento está legível na foto\" \n  },\n  \"labels\": {\n    \"is_digital\": 1,\n    \"is_there_qr_code\": 1,\n    \"is_folded\": 0\n  } \n}\n\\`\\`\\`\n`;\n\n// === 🧩 Monta o prompt final substituindo variáveis ===\nlet promptFinal = promptTemplate\n  .replace(/{{few_shot_text}}/g, few_shot_text)\n  .replace(/{{conference_uuid_js}}/g, vars.conference_uuid_js)\n  .replace(/{{name_js}}/g, vars.name_js)\n  .replace(/{{birthdate_js}}/g, vars.birthdate_js)\n  .replace(/{{document_js}}/g, vars.document_js)\n  .replace(/{{cpf_js}}/g, vars.cpf_js);\n\n// === ✅ Retorno ===\nreturn [\n  {\n    json: {\n      promptTemplate,\n      promptFinal\n    },\n    binary: $input.first().binary // <-- mantém todos os arquivos binários\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2896,
+        4864
+      ],
+      "id": "ID_078",
+      "name": "prompt",
+      "notesInFlow": true,
+      "notes": "sem invalid_data_extraction"
+    },
+    {
+      "parameters": {
+        "jsCode": "// === 🧠 CAPTURA DE VALORES ===\nconst a = $input.first().json.prompt;\nconst b = $('which prompt').first().json.promptTemplate;\n\n// === 🔧 FUNÇÃO DE NORMALIZAÇÃO ===\nconst normalize = (str) => {\n  if (str === null || str === undefined) return '';\n  if (typeof str !== 'string') {\n    try {\n      // tenta converter pra string JSON legível, se for objeto\n      str = JSON.stringify(str);\n    } catch {\n      str = String(str);\n    }\n  }\n  return str\n    .trim()\n    .replace(/\\r\\n/g, '\\n')\n    .replace(/\\n{2,}/g, '\\n') // normaliza múltiplas quebras\n    .replace(/[ \\t]+/g, ' '); // normaliza espaços em excesso\n};\n\n// === 🧽 NORMALIZA AS STRINGS ===\nconst normalizedA = normalize(a);\nconst normalizedB = normalize(b);\n\n// === ⚖️ COMPARAÇÃO ===\nconst isDifferent = normalizedA !== normalizedB;\n\n// === ✅ RETORNO ===\nreturn [\n  {\n    json: {\n      isDifferent,\n      normalizedA,\n      normalizedB\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2496,
+        5392
+      ],
+      "id": "ID_079",
+      "name": "normalize"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT *\nFROM app_audit.di_prompt_versions\nORDER BY created_at DESC\nLIMIT 1",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2352,
+        5392
+      ],
+      "id": "ID_080",
+      "name": "previous prompt1",
+      "credentials": {
+        "postgres": {
+          "id": "REDACTED",
+          "name": "POSTGRES_CREDENTIAL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## AUDIT ACCURACY WORKFLOW",
+        "height": 864,
+        "width": 1200,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2064,
+        3856
+      ],
+      "typeVersion": 1,
+      "id": "ID_081",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    C.conference_uuid,\n    C.validation_date,\n    C.di_audit_at,\n    C.di_is_reprocessed,\n    C.di_reproved_criteria,\n    ARRAY(\n        SELECT r\n        FROM unnest(C.combined_rules) AS r\n        WHERE r IN (\n            'di:is_invalid_image_quality',\n            'di:is_wrong_document_type',\n            'di:is_invalid_data_extraction',\n            'di:is_document_forged',\n            'di:is_name_mismatch',\n            'di:is_document_number_mismatch',\n            'di:is_birthdate_mismatch'\n        )\n    ) AS combined_rules,\n    LEFT(CD.orignal_url, POSITION('&conference_uuid=' IN CD.orignal_url) - 1)\n        || '_optimized.jpg'\n        || SUBSTRING(CD.orignal_url FROM POSITION('&conference_uuid=' IN CD.orignal_url))\n        AS file_url,\n    elem  ->> 'value' AS name,\n    eleme ->> 'value' AS document_number,\n    elemento ->> 'value' AS cpf,\n    elemen ->> 'value' AS birthdate,\n    element ->> 'value' AS di_type,\n    A.accuracy\nFROM app_audit.audit_report_cases C\nLEFT JOIN app_conference.conference_documents CD ON C.conference_uuid = CD.conference_uuid\nLEFT JOIN app_audit.di_cases_accuracy A ON C.conference_uuid = A.conference_uuid\nCROSS JOIN LATERAL jsonb_array_elements(raw_input_data::jsonb -> 'userInfos' -> 'DOCUMENT') elem\nCROSS JOIN LATERAL jsonb_array_elements(raw_input_data::jsonb -> 'userInfos' -> 'DOCUMENT') eleme\nCROSS JOIN LATERAL jsonb_array_elements(raw_input_data::jsonb -> 'userInfos' -> 'DOCUMENT') elemento\nCROSS JOIN LATERAL jsonb_array_elements(raw_input_data::jsonb -> 'userInfos' -> 'DOCUMENT') elemen\nCROSS JOIN LATERAL jsonb_array_elements(raw_input_data::jsonb -> 'userInfos' -> 'DOCUMENT') element\nWHERE C.di_is_processed = TRUE\n--  AND C.di_audit_at >= CURRENT_DATE\n  AND C.validation_date >= CURRENT_DATE - 1\n  AND length(CD.file_path_optimized) > 5\n  AND A.accuracy < 1\n--  AND C.di_is_reprocessed IS NULL\n  AND CD.type = 'DOCUMENT_FRONT'\n  AND elem  ->> 'key' = 'name'\n  AND eleme ->> 'key' = 'document'\n  AND elemen ->> 'key' = 'birthDate'\n  AND element ->> 'key' = 'documentDescription'\n  AND elemento ->> 'key' = 'cpf'\nORDER BY accuracy;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        4240,
+        4528
+      ],
+      "id": "ID_082",
+      "name": "Execute a SQL query1",
+      "credentials": {
+        "postgres": {
+          "id": "REDACTED",
+          "name": "POSTGRES_CREDENTIAL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Recebe os dados de entrada (todos os itens)\nconst data = $input.all().map(item => item.json);\n\nfunction stringifyValue(val) {\n  let v = val;\n  if (typeof v === 'string' && v.startsWith('{') && v.endsWith('}')) {\n    v = v.substring(1, v.length - 1).split(',').join(', ');\n  } else if (Array.isArray(v)) {\n    v = v.join(', ');\n  } else if (typeof v === 'object' && v !== null) {\n    try { v = JSON.stringify(v); } catch (e) { v = String(v); }\n  }\n  return String(v);\n}\n\nconst itemsHtml = data.map(item => {\n\n  const imageUrl =\n    item.file_url ||\n    item.url_optimized ||\n    item.url ||\n    item.image ||\n    item.img ||\n    null;\n\n  const uuid = item.conference_uuid || item.uuid || item.id || 'sem_uuid';\n\n  // Agora cada valor tem data-key (inclui di_audit_at e di_is_reprocessed)\n  const fieldsHtml = Object.entries(item)\n    .filter(([k]) => !['file_url', 'url_optimized', 'url', 'image', 'img'].includes(k))\n    .map(([key, val]) => {\n      const v = stringifyValue(val);\n      return `\n        <div class=\"data-item\">\n          <span class=\"data-label\">${key}:</span>\n          <span class=\"data-value\" data-key=\"${key}\">${v}</span>\n        </div>`;\n    }).join('');\n\n  const imageBlock = imageUrl\n    ? `<img src=\"${String(imageUrl).trim()}\" onerror=\"this.outerHTML='<div class=fallback>Imagem indisponível</div>'\">`\n    : '<div class=\"fallback\">Sem imagem</div>';\n\n  const controlsHtml = `\n    <div class=\"controls\">\n\n      <div class=\"control-group\">\n        <label>di_type_optimized:</label><br>\n        <select class=\"di-type-select\" aria-label=\"di_type_optimized\">\n          <option value=\"\">Selecione...</option>\n          <option value=\"RG\">RG</option>\n          <option value=\"CNH\">CNH</option>\n          <option value=\"CIN\">CIN</option>\n          <option value=\"RNE\">RNE</option>\n          <option value=\"Passaporte\">Passaporte</option>\n        </select>\n      </div>\n\n      <div class=\"control-group\">\n        <label>rotation:</label><br>\n        <select class=\"rotation-select\" aria-label=\"rotation\">\n          <option value=\"0\" selected>0</option>\n          <option value=\"90\">90</option>\n          <option value=\"180\">180</option>\n          <option value=\"270\">270</option>\n        </select>\n      </div>\n\n      <div class=\"control-group\">\n        <label>manual_audit:</label>\n        <div class=\"audit-list\">\n\n          <label class=\"audit-item\">\n            <input type=\"checkbox\" class=\"audit-checkbox\" value=\"is_invalid_image_quality\">\n            is_invalid_image_quality\n          </label>\n\n          <label class=\"audit-item\">\n            <input type=\"checkbox\" class=\"audit-checkbox\" value=\"is_wrong_document_type\">\n            is_wrong_document_type\n          </label>\n\n          <label class=\"audit-item\">\n            <input type=\"checkbox\" class=\"audit-checkbox\" value=\"is_document_forged\">\n            is_document_forged\n          </label>\n\n          <label class=\"audit-item\">\n            <input type=\"checkbox\" class=\"audit-checkbox\" value=\"is_name_mismatch\">\n            is_name_mismatch\n          </label>\n\n          <label class=\"audit-item\">\n            <input type=\"checkbox\" class=\"audit-checkbox\" value=\"is_document_number_mismatch\">\n            is_document_number_mismatch\n          </label>\n\n          <label class=\"audit-item\">\n            <input type=\"checkbox\" class=\"audit-checkbox\" value=\"is_birthdate_mismatch\">\n            is_birthdate_mismatch\n          </label>\n\n        </div>\n      </div>\n\n      <div class=\"control-group\">\n        <label>error_type:</label><br>\n        <select class=\"error-type-select\" aria-label=\"error_type\">\n          <option value=\"\">Selecione...</option>\n          <option value=\"conference_error\">conference_error</option>\n          <option value=\"audit_error\">audit_error</option>\n          <option value=\"user_error\">user_error</option>\n        </select>\n      </div>\n\n      <div class=\"control-group\">\n        <label>notes:</label><br>\n        <input type=\"text\" class=\"notes-input\" placeholder=\"Digite suas notas aqui...\" />\n      </div>\n\n    </div>\n  `;\n\n  return `\n    <div class=\"item case-block\" data-uuid=\"${uuid}\">\n      <div class=\"image-container\">${imageBlock}</div>\n      <div class=\"data-container\">\n        ${fieldsHtml}\n        ${controlsHtml}\n      </div>\n    </div>\n  `;\n}).join('');\n\n// HTML principal\nconst html = `\n<html>\n<head>\n  <meta charset=\"utf-8\">\n  <title>Document Viewer</title>\n\n<style>\n  body {\n    font-family: Arial, sans-serif;\n    background: #f7f7f7;\n    padding: 20px;\n    max-width: 1100px;\n    margin: auto;\n  }\n\n  h1 { \n    font-size: 22px; \n    margin-bottom: 20px; \n    text-align: center;\n  }\n\n  #copyBtn {\n    background: #007bff;\n    color: white;\n    padding: 10px 16px;\n    border: none;\n    border-radius: 6px;\n    cursor: pointer;\n    margin-bottom: 20px;\n    font-size: 16px;\n  }\n\n  #copyBtn:hover {\n    background: #0065d3;\n  }\n\n  .item {\n    background: white;\n    border-radius: 10px;\n    padding: 16px;\n    margin-bottom: 30px;\n    box-shadow: 0 2px 10px rgba(0,0,0,0.08);\n    display: flex;\n    flex-direction: row;\n    gap: 20px;\n  }\n\n  .image-container {\n    flex: 1;\n    max-width: 50%;\n    display: flex;\n    justify-content: center;\n    align-items: flex-start;\n  }\n\n  .image-container img {\n    width: 100%;\n    max-width: 100%;\n    border-radius: 8px;\n    border: 1px solid #ddd;\n    object-fit: contain;\n  }\n\n  .fallback {\n    width: 100%;\n    height: 350px;\n    background: #ddd;\n    border-radius: 6px;\n    display: flex;\n    justify-content: center;\n    align-items: center;\n    color: #777;\n    font-size: 18px;\n  }\n\n  .data-container {\n    flex: 1;\n    max-width: 50%;\n    max-height: 500px;\n    overflow-y: auto;\n    padding-right: 10px;\n  }\n\n  .data-item {\n    border-bottom: 1px solid #eee;\n    padding: 8px 0;\n  }\n\n  .data-label {\n    font-weight: bold;\n    color: #444;\n  }\n\n  .data-value {\n    color: #222;\n    margin-left: 4px;\n    word-break: break-word;\n  }\n\n  .controls {\n    margin-top: 16px;\n    border-top: 1px solid #eee;\n    padding-top: 12px;\n  }\n\n  .control-group {\n    margin-bottom: 14px;\n  }\n\n  .control-group label {\n    font-weight: bold;\n    color: #333;\n    margin-bottom: 6px;\n    display: inline-block;\n  }\n\n  .audit-list {\n    display: grid;\n    grid-template-columns: 1fr 1fr;\n    gap: 8px 12px;\n    margin-top: 6px;\n  }\n\n  .audit-list .audit-item {\n    display: flex;\n    align-items: center;\n    gap: 8px;\n    font-size: 14px;\n    color: #222;\n  }\n\n  .di-type-select, .rotation-select, .notes-input, .error-type-select {\n    width: 100%;\n    padding: 8px;\n    border-radius: 6px;\n    border: 1px solid #ccc;\n    background: #fff;\n  }\n</style>\n\n</head>\n\n<body>\n\n<h1>Visualização de Documentos</h1>\n\n<button id=\"copyBtn\" onclick=\"copyJSON()\">Copiar JSON</button>\n\n<script>\nfunction copyJSON() {\n  const cases = document.querySelectorAll('.case-block');\n  const output = [];\n\n  cases.forEach(block => {\n    const uuid = block.dataset.uuid;\n\n    const selected = Array.from(\n      block.querySelectorAll('.audit-checkbox:checked')\n    ).map(cb => cb.value);\n\n    const manualAuditStr = selected.length > 0\n      ? '{' + selected.join(',') + '}'\n      : '{}';\n\n    const diType = block.querySelector('.di-type-select')?.value || null;\n    const rotation = parseInt(block.querySelector('.rotation-select')?.value || \"0\");\n    const errorType = block.querySelector('.error-type-select')?.value || null;\n    const notes = block.querySelector('.notes-input')?.value || null;\n\n    // NOVO: pegar campos do nó anterior\n    const diAuditAt = block.querySelector('.data-value[data-key=\"di_audit_at\"]')?.textContent || null;\n    const diIsReprocessed = block.querySelector('.data-value[data-key=\"di_is_reprocessed\"]')?.textContent || null;\n\n    const obj = {\n      conference_uuid: uuid,\n      rotation\n    };\n\n    if (diType) obj.di_type_optimized = diType;\n\n    obj.manual_audit = manualAuditStr;\n\n    if (errorType) obj.error_type = errorType;\n    if (notes) obj.notes = notes;\n\n    if (diAuditAt) obj.di_audit_at = diAuditAt;\n    if (diIsReprocessed) obj.di_is_reprocessed = diIsReprocessed;\n\n    output.push(obj);\n  });\n\n  navigator.clipboard.writeText(JSON.stringify(output, null, 2));\n  alert(\"JSON copiado!\");\n}\n</script>\n\n${itemsHtml}\n\n</body>\n</html>\n`;\n\nreturn [\n  {\n    json: { html },\n    binary: {\n      file: {\n        data: Buffer.from(html).toString('base64'),\n        mimeType: 'text/html',\n        fileName: 'preview.html'\n      }\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4416,
+        4528
+      ],
+      "id": "ID_083",
+      "name": "Code in JavaScript6"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        2720,
+        3936
+      ],
+      "id": "ID_084",
+      "name": "Aggregate17"
+    },
+    {
+      "parameters": {
+        "toRecipients": "bruno.soda@onebox.one",
+        "subject": "HTML - low accuracy",
+        "bodyContent": "Segue arquivo HTML com os casos de low accuracy dos últimos 7 dias",
+        "additionalFields": {
+          "attachments": {
+            "attachments": [
+              {
+                "binaryPropertyName": "file"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [
+        4592,
+        4528
+      ],
+      "id": "ID_085",
+      "name": "HTML visual",
+      "webhookId": "REDACTED",
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "REDACTED",
+          "name": "MICROSOFTOUTLOOKOAUTH2API_CREDENTIAL"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "schema": {
+          "__rl": true,
+          "value": "app_audit",
+          "mode": "list",
+          "cachedResultName": "app_audit"
+        },
+        "table": {
+          "__rl": true,
+          "value": "di_cases_accuracy",
+          "mode": "list",
+          "cachedResultName": "di_cases_accuracy"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "tp": "={{ $json.TP }}",
+            "tn": "={{ $json.TN }}",
+            "fp": "={{ $json.FP }}",
+            "fn": "={{ $json.FN }}",
+            "accuracy": "={{ $json.accuracy }}",
+            "conference_uuid": "={{ $json.conference_uuid }}",
+            "audit_uuid": "={{ $json.audit_uuid }}",
+            "validation_date": "={{ $json.validation_date }}",
+            "di_reproved_criteria": "={{ $json.di_reproved_criteria }}",
+            "combined_rules": "={{ $json.combined_rules }}"
+          },
+          "matchingColumns": [
+            "conference_uuid"
+          ],
+          "schema": [
+            {
+              "id": "ID_013",
+              "displayName": "conference_uuid",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ID_017",
+              "displayName": "audit_uuid",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ID_008",
+              "displayName": "validation_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ID_018",
+              "displayName": "di_reproved_criteria",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "array",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ID_032",
+              "displayName": "combined_rules",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "array",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ID_086",
+              "displayName": "tp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ID_087",
+              "displayName": "tn",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ID_088",
+              "displayName": "fp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ID_089",
+              "displayName": "fn",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ID_041",
+              "displayName": "accuracy",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2880,
+        4160
+      ],
+      "id": "ID_090",
+      "name": "Insert",
+      "notesInFlow": true,
+      "credentials": {
+        "postgres": {
+          "id": "REDACTED",
+          "name": "POSTGRES_CREDENTIAL"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "di_cases_accuracy"
+    },
+    {
+      "parameters": {
+        "content": "## REPORTS",
+        "height": 864,
+        "width": 1488,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        3312,
+        3856
+      ],
+      "typeVersion": 1,
+      "id": "ID_091",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    conference_uuid,\n    audit_uuid,\n    validation_date,\n    combined_rules,\n    di_reproved_criteria\nFROM app_audit.di_cases_accuracy\nWHERE validation_date >= CURRENT_DATE - 14\nAND validation_date < CURRENT_DATE - 7",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2272,
+        4544
+      ],
+      "id": "ID_092",
+      "name": "get3",
+      "notesInFlow": true,
+      "credentials": {
+        "postgres": {
+          "id": "REDACTED",
+          "name": "POSTGRES_CREDENTIAL"
+        }
+      },
+      "notes": "di_is_processed"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ✅ Tenta localizar o array de documentos automaticamente\nlet docs = [];\n\nif (Array.isArray(items) && items.length > 0) {\n  const first = items[0].json;\n  if (Array.isArray(first.data)) {\n    docs = first.data;\n  } else if (Array.isArray(first)) {\n    docs = first;\n  } else {\n    // Se os itens já forem o array, usa-os diretamente\n    docs = items.map(i => i.json);\n  }\n}\n\nif (!Array.isArray(docs) || docs.length === 0) {\n  throw new Error(\"Nenhum array de documentos encontrado. Verifique se os dados estão em items[0].json.data ou diretamente nos items.\");\n}\n\n// ✅ Lista dos 7 critérios\nconst criterios = [\n  \"is_invalid_image_quality\",\n  \"is_wrong_document_type\",\n//  \"is_invalid_data_extraction\",\n  \"is_document_forged\",\n  \"is_name_mismatch\",\n  \"is_document_number_mismatch\",\n  \"is_birthdate_mismatch\"\n];\n\n// ✅ Inicializa contadores\nconst metrics = {};\nfor (const c of criterios) {\n  metrics[c] = { TP: 0, TN: 0, FP: 0, FN: 0 };\n}\n\n// ✅ Percorre cada documento\nfor (const doc of docs) {\n  const verdadeiros = new Set(doc.di_reproved_criteria || []);\n  const avaliados = new Set(doc.combined_rules || []);\n\n  for (const criterio of criterios) {\n    const real = verdadeiros.has(criterio);  // ground truth\n    const modelo = avaliados.has(criterio);  // predição\n\n    if (real && modelo) metrics[criterio].TP++;\n    else if (!real && !modelo) metrics[criterio].TN++;\n    else if (!real && modelo) metrics[criterio].FP++;\n    else if (real && !modelo) metrics[criterio].FN++;\n  }\n}\n\n// ✅ Calcula acurácia\nconst resultados = [];\nfor (const criterio of criterios) {\n  const { TP, TN, FP, FN } = metrics[criterio];\n  const total = TP + TN + FP + FN;\n  const acc = total > 0 ? (TP + TN) / total : 0;\n\n  resultados.push({\n    criterio,\n    TP,\n    TN,\n    FP,\n    FN,\n    acuracia: Number(acc.toFixed(2))\n  });\n}\n\nreturn [{ json: { resultados } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2496,
+        4544
+      ],
+      "id": "ID_093",
+      "name": "accuracies calculation3",
+      "notesInFlow": true,
+      "notes": "by criteria"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        3008,
+        4544
+      ],
+      "id": "ID_094",
+      "name": "Merge1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Garantir que existam pelo menos dois items\nif (items.length < 2) {\n  throw new Error(\"É necessário pelo menos 2 items contendo 'resultados'.\");\n}\n\n// Capturar os dois itens\nconst w1 = items[0].json.resultados; // semana mais recente\nconst w2 = items[1].json.resultados; // semana anterior\n\n// Verificação opcional\nif (!Array.isArray(w1) || !Array.isArray(w2)) {\n  throw new Error(\"Um dos itens não contém o array 'resultados'.\");\n}\n\n// Construir tabela organizada\nconst tabela = w1.map((item, index) => {\n  const r2 = w2[index]; // mesma posição\n  return {\n    criterio: item.criterio,\n    w1: item.acuracia,\n    w2: r2 ? r2.acuracia : null\n  };\n});\n\n// -------------------------------------------------------------------\n// Gerar HTML final\n// -------------------------------------------------------------------\nlet html = `\n<table border=\"1\" cellpadding=\"6\" cellspacing=\"0\"\nstyle=\"border-collapse: collapse; font-family: Arial, sans-serif; font-size: 14px;\">\n  <thead style=\"background:#f2f2f2;\">\n    <tr>\n      <th>Critério</th>\n      <th>Acurácia (w-1)</th>\n      <th>Acurácia (w-2)</th>\n    </tr>\n  </thead>\n  <tbody>\n`;\n\ntabela.forEach(row => {\n  html += `\n    <tr>\n      <td>${row.criterio}</td>\n      <td>${row.w1}</td>\n      <td>${row.w2}</td>\n    </tr>\n  `;\n});\n\nhtml += `\n  </tbody>\n</table>\n`;\n\nreturn [\n  {\n    json: {\n      tabela,\n      html\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3408,
+        4544
+      ],
+      "id": "ID_095",
+      "name": "Code in JavaScript8"
+    },
+    {
+      "parameters": {
+        "toRecipients": "bruno.soda@onebox.one",
+        "subject": "=Criteria Accuracy Report - {{ $now.format('yyyy-MM-dd') }}",
+        "bodyContent": "=Onde w-1 são os últimos 7 dias e w-2 os 7 dias anteriores à w-1\n\n{{ $json.html }}",
+        "additionalFields": {
+          "bodyContentType": "html"
+        }
+      },
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [
+        3584,
+        4544
+      ],
+      "id": "ID_096",
+      "name": "criteria accuracy1",
+      "webhookId": "REDACTED",
+      "notesInFlow": true,
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "REDACTED",
+          "name": "MICROSOFTOUTLOOKOAUTH2API_CREDENTIAL"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "w-1 / w-2"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ID_097",
+              "leftValue": "={{ $('Loop').item.json.di_type_optimized }}",
+              "rightValue": "CIN",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2704,
+        5040
+      ],
+      "id": "ID_098",
+      "name": "If CIN"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ID_099",
+              "leftValue": "={{ $json.di_type_optimized }}",
+              "rightValue": "=RG",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "ID_100",
+              "leftValue": "={{ $json.di_type_optimized }}",
+              "rightValue": "CNH",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "ID_101",
+              "leftValue": "={{ $json.di_type_optimized }}",
+              "rightValue": "CIN",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2048,
+        5040
+      ],
+      "id": "ID_102",
+      "name": "If2",
+      "notesInFlow": true,
+      "notes": "CIN RG CNH"
+    },
+    {
+      "parameters": {
+        "jsCode": "// === 🧠 VARIÁVEIS DE CONTEXTO ===\nconst vars = {\n  conference_uuid_js: $('Loop').first().json.conference_uuid,\n  name_js: $('Loop').first().json.raw_input_data.userInfos.DOCUMENT[2]?.value ?? '',\n  birthdate_js: $('Loop').first().json.raw_input_data.userInfos.DOCUMENT[4]?.value ?? '',\n  document_js: $('Loop').first().json.raw_input_data.userInfos.DOCUMENT[5]?.value ?? '',\n  cpf_js: $('Loop').first().json.raw_input_data.userInfos.DOCUMENT[6]?.value ?? ''\n};\n\n// === 📥 Captura o few_shot_text do nó anterior ===\nlet few_shot_text = '';\ntry {\n  few_shot_text = $input.first().json.few_shot_text ?? '';\n} catch (error) {\n  few_shot_text = '';\n}\n\n// === 🧱 TEMPLATE ===\nconst promptTemplate = `\nVocê é um Analista Forense Sênior em auditoria de documentos oficiais brasileiros.\nSua função é realizar avaliações técnicas de alto rigor, destinadas à verificação de autenticidade, consistência de dados e conformidade visual de documentos oficiais (RG, CIN, CNH, RNE e passaporte).\n\nVocê deve atuar com postura pericial, descrevendo apenas o que está visível na imagem, sem suposições, inferências ou interpretações subjetivas.\n\nSua avaliação deve seguir estritamente o protocolo estabelecido e retornar exclusivamente o JSON final, no formato definido, garantindo consistência, precisão e aderência total às regras do sistema.\n\nAntes de iniciar qualquer avaliação ou comparação, dê um passo atrás (step-back) e estabeleça o contexto primário da imagem seguindo esta ordem obrigatória:\n\n1. Identifique o tipo de documento (RG, CNH, CIN, RNE, passaporte).\n2. Determine se o documento parece oficial e compatível com versões reais.\n3. Avalie se há indícios gerais de fraude digital ou manipulação evidente.\n\nSomente após definir esse contexto inicial, prossiga para as análises detalhadas de qualidade, layout e mismatch dos dados.\n\n{{few_shot_text}}\n\n---\n\n## Etapa de Anotação de Dados\n\nMarque 1 se true ou 0 se false de acordo com a imagem disponível para o seguinte:\n\n### \\`is_digital\\`\n1: se imagem não for uma foto de um documento físico de papel (exemplo: printscreen de arquivo digital).\n0: se imagem for uma foto do documento físico de papel.\n\n### \\`is_there_qr_code\\`\n1: somente quando imagem conter qr code.\n0: somente quando imagem não conter qr code.\n\n### \\`is_folded\\`\n1: quando o documento físico está dobrado ao meio, ou seja, a imagem mostra somente a frente ou somente o verso, e a outra metade não aparece. A ausência de vinco não significa que o documento está aberto — se só metade está visível, marque 1.\n0: quando o documento está aberto ou totalmente visível, mesmo que exista um vinco central indicando que já foi dobrado antes.\n\n## Etapa de Avaliação \n\nPara **cada critério técnico abaixo**, siga **duas etapas obrigatórias**: \n\n### 1. Descreva objetivamente o que há na imagem relacionado ao critério analisado. \n\n* Seja **claro, conciso e factual**, sem interpretar ou julgar neste momento. \n* A descrição deve se concentrar **apenas nos elementos presentes na imagem** relacionados ao critério específico. \n\n### 2. Avalie se o critério deve ser **aprovado ou reprovado**, com base nos subcasos definidos. \n\n* Se **reprovado**, forneça uma justificativa com base em pelo menos um dos subcasos e uma **recomendação objetiva** para correção. \n\n--- \n\n## Critérios Técnicos \n\n### \\`is_invalid_image_quality\\` \n\n1. **Descrição**: Verifique se há baixa resolução, desfoque, granulação, brilho excessivo, contraste inadequado, reflexos ou interferências na foto 3x4 do documento ou nos dados textuais de campos obrigatórios. \n2. **Avaliação**: Reprove apenas quando impossível identificar pessoa ou ler dados textuais de campos obrigatórios. \n\n### \\`is_wrong_document_type\\` \n\n1. **Descrição**: Identifique se a imagem contém um documento brasileiro oficial de identificação (RG, CNH, RNE ou passaporte). \n2. **Avaliação**: Reprove se a imagem não contém qualquer um dos documentos oficiais presente. \n\n### \\`is_document_forged\\`  \n\n1. **Descrição**: Observe sinais de edição digital: colagens, cortes, fontes diferentes, cores irregulares, selos desalinhados, bordas duplicadas, layout incompatível.\n2. **Avaliação**: Reprovar apenas se houver evidência clara de fraude digital (desgaste físico não conta).\n\n### \\`is_name_mismatch\\` \n1. **Descrição**: Verifique se o nome da pessoa no documento de identificação é o mesmo que {{name_js}}. Não usar nomes de filiação ou em assinatura para validar.\n2. **Avaliação**: Reprove se não for igual ou não existir(em). Acentuações, espaços duplos e case sensitive não tem problema. \n\n### \\`is_document_number_mismatch\\` \n\n1. **Descrição**: Verifique na imagem se o número do registro geral é o mesmo que {{document_js}}. \n2. **Avaliação**: Reprove se todos os números não forem os mesmos ou não existir(em). Pontos, hífen, espaços duplos e case sensitive não tem problema. \n\n### \\`is_birthdate_mismatch\\` \n\n1. **Descrição**: Verifique se a data de nascimento no documento é a mesma que {{birthdate_js}}. \n2. **Avaliação**: Reprove se as datas não forem as mesmas ou não existir(em). Não levar em consideração o formato da data e espaços duplos. \n\n--- \n\n## Instruções de Resposta \n\n> Responda apenas com JSON **sem usar blocos de código, sem backticks, sem \\`\\`\\`json**, sem texto antes ou depois. \n> **Proibições:** não inclua comentários, texto fora do JSON, campos adicionais ou chaves vazias. \n> \n> **REGRAS OBRIGATÓRIAS DE CONSISTÊNCIA:** \n> \n> 1. Os critérios técnicos devem ser respondidos e retornados na ordem apresentada: is_invalid_image_quality, is_wrong_document_type, is_document_forged, is_name_mismatch, is_document_number_mismatch, is_birthdate_mismatch.\n> 2. \\`approved_criteria\\` e \\`reproved_criteria\\` **não podem** ter o mesmo critério simultaneamente. \n> 3. Para **cada** item em \\`reproved_criteria\\`, deve existir **exatamente uma** entrada correspondente em \\`recommendations\\` usando o **mesmo nome técnico** do critério. \n> 4. Em \\`criteria_descriptions\\`, descreva **objetivamente** o que foi observado **apenas** para os critérios pertinentes; cada descrição deve ser sucinta (1–3 frases). \n> 5. \\`conference_uuid\\` deve ser este: {{conference_uuid_js}}.\n> 6. \\`labels\\` é booleano, 1 para true e 0 para false.\n> \n> **Formato final:** o JSON **deve** ter exatamente as chaves \n> \\` conference _uuid\\`, \\`criteria_descriptions\\`, \\`approved_criteria\\`, \\`reproved_criteria\\`, \\`recommendations\\`, \\`labels\\`. \n> Responda SOMENTE em JSON puro e exatamente no formato especificado, \n> sem adicionar \\`\\`\\`json ou qualquer marcação de código. \n\n--- \n\n## Exemplo de Resposta\n\n\\`\\`\\`json \n{\n  \"conference_uuid\": \"{{conference_uuid_js}}\",\n  \"criteria_descriptions\": {\n    \"is_invalid_image_quality\": \"A imagem apresenta leve granulação, mas os traços faciais estão visíveis.\",\n    \"is_wrong_document_type\": \"O documento presente é um documento brasileiro oficial de identificação.\",\n    \"is_document_forged\": \"O documento presente é um documento brasileiro oficial de identificação.\",\n    \"is_name_mismatch\": \"Nome na imagem: José Carlos da Silva. Nome inputado: {{name_js}}. Tem mismatch de nomes\",\n    \"is_document_number_mismatch\": \"Número na imagem: 000.000.000-00. Número inputado: {{document_js}}. Não tem mismatch de números\",\n    \"is_birthdate_mismatch\": \"Data de nascimento na imagem: 01/01/1990. Data de nascimento inputado: {{birthdate_js}}. Tem mismatch de datas\"\n  },\n  \"approved_criteria\": [\"is_invalid_image_quality\", \"is_wrong_document_type\", \"is_document_forged\", \"is_document_number_mismatch\"], \n  \"reproved_criteria\": [\"is_name_mismatch\", \"is_birthdate_mismatch\"], \n  \"recommendations\": { \n    \"is_name_mismatch\": \"Envie uma imagem com o mesmo nome inputado\", \n    \"is_birthdate_mismatch\": \"Confira se o input está correto ou se a data de nascimento está legível na foto\" \n  },\n  \"labels\": {\n    \"is_digital\": 1,\n    \"is_there_qr_code\": 1,\n    \"is_folded\": 0\n  } \n}\n\\`\\`\\`\n`;\n\n// === 🧩 Monta o prompt final substituindo variáveis ===\nlet promptFinal = promptTemplate\n  .replace(/{{few_shot_text}}/g, few_shot_text)\n  .replace(/{{conference_uuid_js}}/g, vars.conference_uuid_js)\n  .replace(/{{name_js}}/g, vars.name_js)\n  .replace(/{{birthdate_js}}/g, vars.birthdate_js)\n  .replace(/{{document_js}}/g, vars.document_js)\n  .replace(/{{cpf_js}}/g, vars.cpf_js);\n\n// === ✅ Retorno ===\nreturn [\n  {\n    json: {\n      promptTemplate,\n      promptFinal\n    },\n    binary: $input.first().binary // <-- mantém todos os arquivos binários\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2896,
+        5040
+      ],
+      "id": "ID_103",
+      "name": "prompt3",
+      "notesInFlow": true,
+      "notes": "sem invalid_data_extraction"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ID_104",
+              "leftValue": "={{ $json.isDifferent }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2656,
+        5392
+      ],
+      "id": "ID_105",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "content": "## SAVE RESULTS",
+        "height": 512,
+        "width": 2896,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        848,
+        5328
+      ],
+      "typeVersion": 1,
+      "id": "ID_106",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n - Function node\n// Este script itera sobre todos os items recebidos e normaliza 'birthDate' dentro de raw_input_data.\n// Preserva tipo original de raw_input_data (string ou objeto).\n\n// Helper: converte YYYY-MM-DD (ou YYYY/MM/DD) possivelmente com hora em DD/MM/YYYY\nfunction isoToBR(isoStr) {\n\ttry {\n\t\t// extrai apenas a parte de data (YYYY-MM-DD ou YYYY/MM/DD)\n\t\tconst m = isoStr.match(/(\\d{4})[-\\/](\\d{2})[-\\/](\\d{2})/);\n\t\tif (!m) return null;\n\t\tconst [, year, month, day] = m;\n\t\t// checa validade simples (mês 01-12, dia 01-31)\n\t\tconst mi = parseInt(month, 10);\n\t\tconst di = parseInt(day, 10);\n\t\tif (mi < 1 || mi > 12 || di < 1 || di > 31) return null;\n\t\treturn `${day}/${month}/${year}`;\n\t} catch (err) {\n\t\treturn null;\n\t}\n}\n\nconst result = items.map(item => {\n\t// clonamos o json para não corromper referências originais\n\tconst out = JSON.parse(JSON.stringify(item.json || {}));\n\n\t// pega raw_input_data\n\tlet raw = out.raw_input_data;\n\n\t// guarda tipo original\n\tconst rawWasString = (typeof raw === 'string');\n\n\t// se for string, tenta parsear\n\tlet parsed;\n\tif (rawWasString) {\n\t\ttry {\n\t\t\tparsed = JSON.parse(raw);\n\t\t} catch (err) {\n\t\t\t// não é JSON válido: nada a fazer\n\t\t\tparsed = null;\n\t\t}\n\t} else if (raw && typeof raw === 'object') {\n\t\tparsed = raw;\n\t} else {\n\t\tparsed = null;\n\t}\n\n\t// se temos um objeto parseado, procuramos por birthDate em userInfos/*\n\tif (parsed && parsed.userInfos && typeof parsed.userInfos === 'object') {\n\t\tfor (const key of Object.keys(parsed.userInfos)) {\n\t\t\tconst arr = parsed.userInfos[key];\n\t\t\t// só processa arrays (ex: DOCUMENT, SCHOLARITY_CERTIFICATE)\n\t\t\tif (Array.isArray(arr)) {\n\t\t\t\tfor (const obj of arr) {\n\t\t\t\t\tif (obj && obj.key === 'birthDate' && typeof obj.value === 'string' && obj.value.trim() !== '') {\n\t\t\t\t\t\tconst formatted = isoToBR(obj.value.trim());\n\t\t\t\t\t\tif (formatted) {\n\t\t\t\t\t\t\tobj.value = formatted;\n\t\t\t\t\t\t}\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n\n\t// grava de volta no mesmo tipo que veio\n\tif (rawWasString) {\n\t\tout.raw_input_data = parsed ? JSON.stringify(parsed) : raw; // se parse falhou, mantemos original\n\t} else {\n\t\tout.raw_input_data = parsed || raw;\n\t}\n\n\t// 🔥 CORREÇÃO AQUI:\n\t// devolve json + binary intactos\n\treturn {\n\t\tjson: out,\n\t\tbinary: item.binary ?? {}\n\t};\n});\n\nreturn result;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1424,
+        4960
+      ],
+      "id": "ID_107",
+      "name": "convert date",
+      "notesInFlow": true,
+      "notes": "dd/mm/aaaa"
+    },
+    {
+      "parameters": {
+        "content": "## REPROCESS AFTER ROTATION (MANUAL SETTINGS AND TRIGGER)\n1. update with the poor accuracy cases selected for reprocess in the 'Edit Fields' node and save\n2. disconnect all the arrows from the node 'Filter'\n3. connect the 'Filter' node to the 'uuid_list2' node and trigger manually. This will delete their first audit evaluation from all tables\n4. disconnect all the arrows from the node 'Filter'\n5. connect the 'Filter' node to the 'uuid_list' and to the input 2 in 'enrich 2' and trigger manually\n6. disconnect all the arrows from the node 'Filter'\n7. connect the 'Filter' node to the 'uuid_list1' node and trigger manually. This will update their status as reprocessed",
+        "height": 864,
+        "width": 1168,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        848,
+        3856
+      ],
+      "typeVersion": 1,
+      "id": "ID_108",
+      "name": "Sticky Note12"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        1648,
+        4560
+      ],
+      "id": "ID_109",
+      "name": "Limit1",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extrai todos os conference_uuid dos items recebidos\nconst uuids = items\n  .map(i => i.json.conference_uuid)\n  .filter(u => typeof u === \"string\" && u.trim().length > 0);\n\n// Monta a lista no formato desejado:\n// 'uuid1',\n// 'uuid2',\n// ...\n// 'uuidN'\nconst formatted = uuids\n  .map(u => `'${u}'`)\n  .join(',\\n');\n\n// Retorna um único item com a string final\nreturn [\n  {\n    json: {\n      uuid_list: formatted\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1552,
+        4112
+      ],
+      "id": "ID_110",
+      "name": "uuid_list"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Recupera todos os itens da entrada\nconst items = $input.all();\n\n// Inicializa variáveis\nlet promptFinal = null;\nlet promptTemplate = null;\n\n// Percorre cada item de entrada\nfor (const item of items) {\n  const data = item.json;\n\n  if (data.promptFinal && data.promptTemplate) {\n    promptFinal = data.promptFinal;\n    promptTemplate = data.promptTemplate;\n    break; // encontrou, pode parar\n  }\n}\n\nreturn [\n  {\n    json: {\n      promptFinal,\n      promptTemplate\n    },\n    binary: items[0].binary // mantém binário do primeiro item\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3104,
+        5040
+      ],
+      "id": "ID_111",
+      "name": "which prompt"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 4
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        1024,
+        4960
+      ],
+      "id": "ID_112",
+      "name": "Schedule 5am2",
+      "notesInFlow": true,
+      "notes": "5am daily"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "[\n  {\n    \"conference_uuid\": \"019b1fed-882d-7006-adc0-dfe40bf7f3c2\",\n    \"rotation\": 0,\n    \"manual_audit\": \"{}\",\n    \"di_audit_at\": \"2025-12-16T09:05:56.061Z\",\n    \"di_is_reprocessed\": \"null\"\n  },\n  {\n    \"conference_uuid\": \"019b2414-ae69-7a4b-9354-33c357af12ea\",\n    \"rotation\": 180,\n    \"manual_audit\": \"{}\",\n    \"di_audit_at\": \"2025-12-16T17:26:59.278Z\",\n    \"di_is_reprocessed\": \"null\"\n  },\n  {\n    \"conference_uuid\": \"019b228d-8c97-702a-80fd-49932cf6e288\",\n    \"rotation\": 0,\n    \"manual_audit\": \"{}\",\n    \"di_audit_at\": \"2025-12-16T09:03:21.583Z\",\n    \"di_is_reprocessed\": \"null\"\n  },\n  {\n    \"conference_uuid\": \"019b232d-4541-7af7-86c6-f22dc9144df3\",\n    \"rotation\": 0,\n    \"manual_audit\": \"{}\",\n    \"di_audit_at\": \"2025-12-16T09:04:03.166Z\",\n    \"di_is_reprocessed\": \"null\"\n  }\n]",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1120,
+        4112
+      ],
+      "id": "ID_113",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    ARC.conference_uuid,\n    ARC.audit_uuid,\n    ARC.tenant_id,\n    ARC.tenant,\n    ARC.product,\n    ARC.validation_date,\n    -- Monta a nova URL com \"_optimized.jpg\" antes de \"&conference_uuid=\"\n    LEFT(CD.orignal_url, POSITION('&conference_uuid=' IN CD.orignal_url) - 1)\n        || '_optimized.jpg'\n        || SUBSTRING(CD.orignal_url FROM POSITION('&conference_uuid=' IN CD.orignal_url))\n        AS url_optimized,\n    ARC.raw_input_data,\n    ARC.combined_rules,\n    elem ->> 'value' AS di_type\nFROM app_audit.audit_report_cases ARC\nLEFT JOIN app_conference.conference_documents CD ON ARC.conference_uuid = CD.conference_uuid\nCROSS JOIN LATERAL jsonb_array_elements(ARC.raw_input_data::jsonb -> 'userInfos' -> 'DOCUMENT') elem\nWHERE length(file_path_optimized) > 5\n-- AND ARC.validation_date = CURRENT_DATE - 1\nAND CD.type = 'DOCUMENT_FRONT'\nAND elem ->> 'key' = 'documentDescription'\nAND ARC.di_reproved_criteria IS NULL\nAND ARC.conference_uuid IN (\n    {{ $json.uuid_list }}\n    )",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1680,
+        4112
+      ],
+      "id": "ID_114",
+      "name": "get_cases2",
+      "credentials": {
+        "postgres": {
+          "id": "REDACTED",
+          "name": "POSTGRES_CREDENTIAL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extrai todos os conference_uuid dos items recebidos\nconst uuids = items\n  .map(i => i.json.conference_uuid)\n  .filter(u => typeof u === \"string\" && u.trim().length > 0);\n\n// Monta a lista no formato desejado:\n// 'uuid1',\n// 'uuid2',\n// ...\n// 'uuidN'\nconst formatted = uuids\n  .map(u => `'${u}'`)\n  .join(',\\n');\n\n// Retorna um único item com a string final\nreturn [\n  {\n    json: {\n      uuid_list: formatted\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        992,
+        4560
+      ],
+      "id": "ID_115",
+      "name": "uuid_list1"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "fieldsToMatchString": "conference_uuid",
+        "joinMode": "enrichInput2",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1664,
+        4336
+      ],
+      "id": "ID_116",
+      "name": "enrich 2"
+    },
+    {
+      "parameters": {
+        "operation": "rotate",
+        "rotate": "={{ $('Loop').item.json.rotation }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.editImage",
+      "typeVersion": 1,
+      "position": [
+        3392,
+        5040
+      ],
+      "id": "ID_117",
+      "name": "rotation"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ID_118",
+              "leftValue": "={{ $json.rotation }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            },
+            {
+              "id": "ID_119",
+              "leftValue": "={{ $json.di_type_optimized }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        1296,
+        4112
+      ],
+      "id": "ID_120",
+      "name": "Filter"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ID_121",
+              "name": "di_type_optimized",
+              "value": "={{ $json.raw_input_data.userInfos.DOCUMENT[1].value }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1568,
+        4960
+      ],
+      "id": "ID_122",
+      "name": "Edit Fields2"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ID_123",
+              "name": "di_type_optimized",
+              "value": "={{ $json.di_type_optimized ?? $json.di_type }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "include": "except",
+        "excludeFields": "di_type",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1808,
+        4336
+      ],
+      "id": "ID_124",
+      "name": "Edit Fields3"
+    },
+    {
+      "parameters": {
+        "content": "## DELETE FIRST AUDIT (FOR POOR ACCURACY CASES ONLY)",
+        "height": 416,
+        "width": 576,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        848,
+        4304
+      ],
+      "typeVersion": 1,
+      "id": "ID_125",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DROP TABLE IF EXISTS tmp_rotate;\n\nCREATE TEMP TABLE tmp_rotate AS\nSELECT\n    ARC.conference_uuid\nFROM app_audit.audit_report_cases ARC\nLEFT JOIN app_conference.conference_documents CD ON ARC.conference_uuid = CD.conference_uuid\nLEFT JOIN app_audit.di_cases_accuracy A ON ARC.conference_uuid = A.conference_uuid\nCROSS JOIN LATERAL jsonb_array_elements(ARC.raw_input_data::jsonb -> 'userInfos' -> 'DOCUMENT') elem\nWHERE length(file_path_optimized) > 5\n-- AND A.accuracy < 1\nAND CD.type = 'DOCUMENT_FRONT'\nAND elem ->> 'key' = 'documentDescription'\nAND ARC.conference_uuid IN (\n  {{ $json.uuid_list }}\n);\n\nUPDATE app_audit.audit_report_cases\nSET di_reproved_criteria = NULL,\n    di_audit_at = NULL,\n    di_is_processed = NULL\nWHERE conference_uuid IN (\n    SELECT * FROM tmp_rotate\n    );\n\nDELETE FROM app_audit.di_audit_results\nWHERE conference_uuid IN (\n    SELECT * FROM tmp_rotate\n);\n\nDELETE FROM app_audit.di_cases_accuracy\nWHERE conference_uuid IN (\n    SELECT * FROM tmp_rotate\n);",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1184,
+        4400
+      ],
+      "id": "ID_126",
+      "name": "delete",
+      "notesInFlow": true,
+      "credentials": {
+        "postgres": {
+          "id": "REDACTED",
+          "name": "POSTGRES_CREDENTIAL"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "for reprocess"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extrai todos os conference_uuid dos items recebidos\nconst uuids = items\n  .map(i => i.json.conference_uuid)\n  .filter(u => typeof u === \"string\" && u.trim().length > 0);\n\n// Monta a lista no formato desejado:\n// 'uuid1',\n// 'uuid2',\n// ...\n// 'uuidN'\nconst formatted = uuids\n  .map(u => `'${u}'`)\n  .join(',\\n');\n\n// Retorna um único item com a string final\nreturn [\n  {\n    json: {\n      uuid_list: formatted\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        992,
+        4400
+      ],
+      "id": "ID_127",
+      "name": "uuid_list2"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE app_audit.audit_report_cases\nSET di_is_reprocessed = TRUE\nWHERE conference_uuid IN (\n    {{ $json.uuid_list }}\n    );",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1184,
+        4560
+      ],
+      "id": "ID_128",
+      "name": "reprocessed",
+      "notesInFlow": true,
+      "credentials": {
+        "postgres": {
+          "id": "REDACTED",
+          "name": "POSTGRES_CREDENTIAL"
+        }
+      },
+      "notes": "SET di_is_reprocessed = TRUE"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH daily_avg AS (\n    SELECT\n        validation_date::date AS validation_date,\n        AVG(accuracy) AS avg_accuracy_day,\n        COUNT(*) AS cases_count_day\n    FROM app_audit.di_cases_accuracy\n    GROUP BY validation_date\n)\nSELECT\n    validation_date,\n    avg_accuracy_day,\n    AVG(avg_accuracy_day) OVER (\n        ORDER BY validation_date\n        ROWS BETWEEN 6 PRECEDING AND CURRENT ROW\n    ) AS moving_avg_7d,\n    cases_count_day\nFROM daily_avg\nORDER BY validation_date;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        3856,
+        4320
+      ],
+      "id": "ID_129",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "REDACTED",
+          "name": "POSTGRES_CREDENTIAL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const labels = [];\nconst data = [];\n\n// Pega os últimos 10 itens, assumindo que os itens estão ordenados por data (caso contrário, ordene antes)\nconst last10Items = items.slice(-14);\n\nfor (const item of last10Items) {\n  // Formata a data no formato MM-DD\n  const date = new Date(item.json.validation_date);\n  const formattedDate = (date.getMonth() + 1).toString().padStart(2, '0') + '-' + date.getDate().toString().padStart(2, '0');\n  \n  labels.push(formattedDate);\n  \n  // Arredonda a acurácia para 2 casas decimais\n  const roundedAccuracy = Math.round(item.json.moving_avg_7d * 100) / 100;\n  \n  data.push(roundedAccuracy);\n}\n\nreturn [\n  {\n    json: {\n      labels,\n      data\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4032,
+        4320
+      ],
+      "id": "ID_130",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// URL base do QuickChart (template fixo)\nconst baseUrl =\n  'https://example.com/REDACTED';\n\n// Dados dinâmicos\nconst labels = items[0].json.labels;\nconst data = items[0].json.data;\n\n// Converte arrays em string\nconst labelsParam = labels.join(',');\nconst dataParam = data.join(',');\n\n// Monta URL final do gráfico\nconst chartUrl =\n  `${baseUrl}?labels=${encodeURIComponent(labelsParam)}&data1=${encodeURIComponent(dataParam)}`;\n\n// HTML compatível com Outlook (tabela + inline CSS)\nconst html = `\n<table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background-color:#f6f6f6;padding:20px;\">\n  <tr>\n    <td align=\"center\">\n      <table width=\"700\" cellpadding=\"0\" cellspacing=\"0\" style=\"background-color:#ffffff;border:1px solid #dddddd;\">\n        <tr>\n          <td style=\"padding:20px;font-family:Arial,Helvetica,sans-serif;\">\n            <h2 style=\"margin:0 0 12px 0;color:#333333;\">\n              Accuracy – Média Móvel 14 dias\n            </h2>\n            <p style=\"margin:0 0 16px 0;color:#666666;font-size:13px;\">\n              Evolução da acurácia ao longo dos últimos dias.\n            </p>\n            <img\n              src=\"${chartUrl}\"\n              alt=\"Gráfico de Accuracy\"\n              width=\"660\"\n              style=\"display:block;border:1px solid #cccccc;\"\n            />\n          </td>\n        </tr>\n      </table>\n    </td>\n  </tr>\n</table>\n`;\n\nreturn [\n  {\n    json: {\n      chartUrl,\n      emailHtml: html\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4208,
+        4320
+      ],
+      "id": "ID_131",
+      "name": "Code in JavaScript2"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT *\nFROM app_audit.di_cases_accuracy\nWHERE validation_date >= CURRENT_DATE - 8",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        3680,
+        4144
+      ],
+      "id": "ID_132",
+      "name": "Execute a SQL query3",
+      "credentials": {
+        "postgres": {
+          "id": "REDACTED",
+          "name": "POSTGRES_CREDENTIAL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n Function node\n\nconst CRITERIOS = [\n  \"is_invalid_image_quality\",\n  \"is_wrong_document_type\",\n  \"is_document_forged\",\n  \"is_name_mismatch\",\n  \"is_document_number_mismatch\",\n  \"is_birthdate_mismatch\",\n];\n\nconst groups = {};\n\n// Agrupa por dia\nfor (const item of items) {\n  const dateRaw = item.json?.validation_date;\n  if (!dateRaw) continue;\n\n  // Normaliza para YYYY-MM-DD\n  const day = new Date(dateRaw).toISOString().slice(0, 10);\n\n  if (!groups[day]) {\n    groups[day] = {\n      date: day,\n      count: 0,\n      sums: Object.fromEntries(CRITERIOS.map(c => [c, 0])),\n    };\n  }\n\n  groups[day].count += 1;\n\n  for (const c of CRITERIOS) {\n    const val = Number(item.json?.[c]);\n    if (Number.isFinite(val)) {\n      groups[day].sums[c] += val;\n    }\n  }\n}\n\n// 🔹 ORDENA os dias em ordem crescente\nconst sortedDays = Object.keys(groups).sort(); // YYYY-MM-DD ordena corretamente\n\n// Calcula agreement rate (2 casas decimais)\nconst output = [];\n\nfor (const day of sortedDays) {\n  const g = groups[day];\n  const row = {\n    validation_date: g.date,\n    count: g.count,\n  };\n\n  for (const c of CRITERIOS) {\n    const rate = g.count > 0 ? g.sums[c] / g.count : null;\n    row[c] = rate !== null ? Number(rate.toFixed(2)) : null;\n  }\n\n  output.push({ json: row });\n}\n\nreturn output;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4032,
+        4144
+      ],
+      "id": "ID_133",
+      "name": "Code in JavaScript3"
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n Function node\n\nconst CRITERIOS = [\n  \"is_invalid_image_quality\",\n  \"is_wrong_document_type\",\n  \"is_document_forged\",\n  \"is_name_mismatch\",\n  \"is_document_number_mismatch\",\n  \"is_birthdate_mismatch\",\n];\n\nfor (const item of items) {\n  const accRaw = item.json?.accuracy;\n  const accuracy = typeof accRaw === \"number\" ? accRaw : parseFloat(accRaw);\n\n  // Caso accuracy === 1 → tudo 1\n  if (accuracy === 1) {\n    for (const c of CRITERIOS) {\n      item.json[c] = 1;\n    }\n    continue;\n  }\n\n  // Caso accuracy < 1 → compara campos\n  const diSet = new Set(item.json?.di_reproved_criteria ?? []);\n  const crSet = new Set(item.json?.combined_rules ?? []);\n\n  for (const c of CRITERIOS) {\n    const inDI = diSet.has(c);\n    const inCR = crSet.has(c);\n\n    // 1 se ambos iguais (true/true ou false/false)\n    // 0 se aparece em apenas um\n    item.json[c] = (inDI === inCR) ? 1 : 0;\n  }\n}\n\nreturn items;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3856,
+        4144
+      ],
+      "id": "ID_134",
+      "name": "count/sum criteria"
+    },
+    {
+      "parameters": {
+        "toRecipients": "bruno.soda@onebox.one",
+        "subject": "Criteria Accuracy Agreement Rate",
+        "bodyContent": "=Data: {{ $now.format('yyyy-MM-dd') }}\n<p></p>\nGENERAL AGREEMENT RATE\n{{ $json.emailHtml }}\n<p></p>\nCRITERIA AGREEMENT RATE\n{{ $json.table }}\n<p></p>\nACCURACY DISTRIBUTION\n{{ $json.table1 }}",
+        "additionalFields": {
+          "bodyContentType": "html"
+        }
+      },
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [
+        4576,
+        4144
+      ],
+      "id": "ID_135",
+      "name": "Send a message",
+      "webhookId": "REDACTED",
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "REDACTED",
+          "name": "MICROSOFTOUTLOOKOAUTH2API_CREDENTIAL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "convertToHtmlTable",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.html",
+      "typeVersion": 1.2,
+      "position": [
+        4192,
+        4144
+      ],
+      "id": "ID_136",
+      "name": "HTML"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 12
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        3408,
+        4144
+      ],
+      "id": "ID_137",
+      "name": "Schedule Trigger1"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "numberInputs": 3,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        4416,
+        4128
+      ],
+      "id": "ID_138",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "operation": "convertToHtmlTable",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.html",
+      "typeVersion": 1.2,
+      "position": [
+        4032,
+        3968
+      ],
+      "id": "ID_139",
+      "name": "HTML1"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ID_140",
+              "name": "table1",
+              "value": "={{ $json.table }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        4192,
+        3968
+      ],
+      "id": "ID_141",
+      "name": "Edit Fields1"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 6
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        4048,
+        4528
+      ],
+      "id": "ID_142",
+      "name": "Schedule Trigger"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "query get_sample": {
+      "main": [
+        [
+          {
+            "node": "query get_cases",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Insert in audit_report_counts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "query get_cases": {
+      "main": [
+        [
+          {
+            "node": "Insert in audit_report_cases",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert in audit_report_cases": {
+      "main": [
+        []
+      ]
+    },
+    "Scheduled 4am": {
+      "main": [
+        [
+          {
+            "node": "query get_sample",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get1": {
+      "main": [
+        [
+          {
+            "node": "accuracies calculation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert new prompt1": {
+      "main": [
+        [
+          {
+            "node": "Aggregate15",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "accuracies calculation": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update in audit_report_cases": {
+      "main": [
+        [
+          {
+            "node": "Aggregate17",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get audit results": {
+      "main": [
+        [
+          {
+            "node": "Update in audit_report_cases",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate16": {
+      "main": [
+        [
+          {
+            "node": "get audit results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate15": {
+      "main": [
+        [
+          {
+            "node": "Insert in results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert in results": {
+      "main": [
+        [
+          {
+            "node": "Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert in openai_raw_content": {
+      "main": [
+        [
+          {
+            "node": "Parser llm response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parser llm response": {
+      "main": [
+        [
+          {
+            "node": "previous prompt1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP GET": {
+      "main": [
+        [
+          {
+            "node": "rotation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop": {
+      "main": [
+        [
+          {
+            "node": "Aggregate16",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_cases": {
+      "main": [
+        [
+          {
+            "node": "convert date",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert in results2": {
+      "main": [
+        [
+          {
+            "node": "Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get2": {
+      "main": [
+        [
+          {
+            "node": "standardizes reproved fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "standardizes reproved fields1": {
+      "main": [
+        [
+          {
+            "node": "accuracies calculation1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate2": {
+      "main": [
+        [
+          {
+            "node": "get1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "get3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "accuracies calculation1": {
+      "main": [
+        [
+          {
+            "node": "Insert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "which di": {
+      "main": [
+        [
+          {
+            "node": "few_shot_text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "zero shot": {
+      "main": [
+        [
+          {
+            "node": "Insert in openai_raw_content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "few_shot": {
+      "main": [
+        [
+          {
+            "node": "which di",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "zero shot1": {
+      "main": [
+        [
+          {
+            "node": "few_shot_text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "few_shot_text": {
+      "main": [
+        [
+          {
+            "node": "If CIN",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "prompt": {
+      "main": [
+        [
+          {
+            "node": "which prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "normalize": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "previous prompt1": {
+      "main": [
+        [
+          {
+            "node": "normalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query2": {
+      "main": [
+        [
+          {
+            "node": "HTML1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript6": {
+      "main": [
+        [
+          {
+            "node": "HTML visual",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate17": {
+      "main": [
+        [
+          {
+            "node": "get2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert": {
+      "main": [
+        [
+          {
+            "node": "Aggregate2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get3": {
+      "main": [
+        [
+          {
+            "node": "accuracies calculation3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "accuracies calculation3": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript8": {
+      "main": [
+        [
+          {
+            "node": "criteria accuracy1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If CIN": {
+      "main": [
+        [
+          {
+            "node": "prompt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "prompt3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If2": {
+      "main": [
+        [
+          {
+            "node": "few_shot",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "zero shot1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "prompt3": {
+      "main": [
+        [
+          {
+            "node": "which prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Insert new prompt1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Insert in results2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "convert date": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limit1": {
+      "main": [
+        [
+          {
+            "node": "Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "uuid_list": {
+      "main": [
+        [
+          {
+            "node": "get_cases2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "which prompt": {
+      "main": [
+        [
+          {
+            "node": "HTTP GET",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule 5am2": {
+      "main": [
+        [
+          {
+            "node": "get_cases",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_cases2": {
+      "main": [
+        [
+          {
+            "node": "enrich 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "uuid_list1": {
+      "main": [
+        [
+          {
+            "node": "reprocessed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "enrich 2": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "rotation": {
+      "main": [
+        [
+          {
+            "node": "zero shot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter": {
+      "main": [
+        [
+          {
+            "node": "uuid_list",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "enrich 2",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Edit Fields2": {
+      "main": [
+        [
+          {
+            "node": "Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields3": {
+      "main": [
+        [
+          {
+            "node": "Limit1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "uuid_list2": {
+      "main": [
+        [
+          {
+            "node": "delete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query3": {
+      "main": [
+        [
+          {
+            "node": "count/sum criteria",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript3": {
+      "main": [
+        [
+          {
+            "node": "HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "count/sum criteria": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTML": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger1": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query3",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Execute a SQL query2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTML1": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false,
+    "errorWorkflow": "19q3FmAT6Mk2jGMf"
+  },
+  "versionId": "VERSIONID_143",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "REDACTED"
+  },
+  "id": "ID_144",
+  "tags": []
+}
