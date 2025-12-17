@@ -1,35 +1,37 @@
----------------------- [DELETE FIRST AUDIT STEP] DELETE FIRST EVALUATION BY LLM FOR LOW ACCURACY CASES IN ALL TABLES -----------------------------------
-DROP TABLE IF EXISTS tmp_rotate;
+---------------------- [RESET FIRST AUDIT STEP] RESET FIRST LLM EVALUATION FOR LOW-ACCURACY CASES (SANITIZED) ----------------------
+DROP TABLE IF EXISTS tmp_reset;
 
-CREATE TEMP TABLE tmp_rotate AS
+CREATE TEMP TABLE tmp_reset AS
 SELECT
-    ARC.conference_uuid
-FROM onedocs_audit.audit_report_cases ARC
-LEFT JOIN onedocs_conference.conference_documents CD ON ARC.conference_uuid = CD.conference_uuid
-LEFT JOIN onedocs_audit.di_cases_accuracy A ON ARC.conference_uuid = A.conference_uuid
-CROSS JOIN LATERAL jsonb_array_elements(ARC.raw_input_data::jsonb -> 'userInfos' -> 'DOCUMENT') elem
-WHERE length(file_path_optimized) > 5
--- AND A.accuracy < 1
-AND CD.type = 'DOCUMENT_FRONT'
-AND elem ->> 'key' = 'documentDescription'
-AND ARC.conference_uuid IN (
-  {{ $json.uuid_list }}
+    arc.case_uuid
+FROM app_audit.audit_cases arc
+LEFT JOIN app_validation.case_documents cd
+    ON arc.case_uuid = cd.case_uuid
+LEFT JOIN app_audit.case_accuracy a
+    ON arc.case_uuid = a.case_uuid
+CROSS JOIN LATERAL jsonb_array_elements(arc.raw_input_data::jsonb -> 'userInfos' -> 'DOCUMENT') elem
+WHERE length(cd.file_path_optimized) > 5
+-- AND a.accuracy_score < 1
+  AND cd.type = 'DOCUMENT_FRONT'
+  AND elem ->> 'key' = 'documentDescription'
+  AND arc.case_uuid IN (
+    {{ $json.uuid_list }}
+  );
+
+UPDATE app_audit.audit_cases
+SET audit_rejected_criteria = NULL,
+    audit_at = NULL,
+    is_processed = NULL
+WHERE case_uuid IN (
+    SELECT case_uuid FROM tmp_reset
 );
 
-UPDATE onedocs_audit.audit_report_cases
-SET di_reproved_criteria = NULL,
-    di_audit_at = NULL,
-    di_is_processed = NULL
-WHERE conference_uuid IN (
-    SELECT * FROM tmp_rotate
-    );
-
-DELETE FROM onedocs_audit.di_audit_results
-WHERE conference_uuid IN (
-    SELECT * FROM tmp_rotate
+DELETE FROM app_audit.audit_results
+WHERE case_uuid IN (
+    SELECT case_uuid FROM tmp_reset
 );
 
-DELETE FROM onedocs_audit.di_cases_accuracy
-WHERE conference_uuid IN (
-    SELECT * FROM tmp_rotate
+DELETE FROM app_audit.case_accuracy
+WHERE case_uuid IN (
+    SELECT case_uuid FROM tmp_reset
 );
