@@ -1,51 +1,51 @@
------------------------------------------- [REPORT STEP] GET LOW ACCURACY CASES FOR VISUAL ANALYSIS ------------------------------
+------------------------------------------ [REPORT STEP] GET LOW-ACCURACY CASES FOR VISUAL REVIEW (SANITIZED) ------------------------------
 SELECT
-    C.conference_uuid,
-    C.validation_date,
-    C.di_audit_at,
-    C.di_is_reprocessed,
-    C.di_reproved_criteria,
+    c.case_uuid,
+    c.validation_date,
+    c.audit_at,
+    c.is_reprocessed,
+    c.audit_rejected_criteria,
     ARRAY(
         SELECT r
-        FROM unnest(C.combined_rules) AS r
+        FROM unnest(c.combined_rules) AS r
         WHERE r IN (
-            'di:is_invalid_image_quality',
-            'di:is_wrong_document_type',
-            'di:is_invalid_data_extraction',
-            'di:is_document_forged',
-            'di:is_name_mismatch',
-            'di:is_document_number_mismatch',
-            'di:is_birthdate_mismatch'
+            'rule:invalid_image_quality',
+            'rule:wrong_document_type',
+            'rule:invalid_data_extraction',
+            'rule:document_forgery_suspected',
+            'rule:name_mismatch',
+            'rule:document_number_mismatch',
+            'rule:birthdate_mismatch'
         )
-    ) AS combined_rules,
-    LEFT(CD.orignal_url, POSITION('&conference_uuid=' IN CD.orignal_url) - 1)
+    ) AS filtered_rules,
+    LEFT(cd.original_url, POSITION('&case_uuid=' IN cd.original_url) - 1)
         || '_optimized.jpg'
-        || SUBSTRING(CD.orignal_url FROM POSITION('&conference_uuid=' IN CD.orignal_url))
+        || SUBSTRING(cd.original_url FROM POSITION('&case_uuid=' IN cd.original_url))
         AS file_url,
-    elem  ->> 'value' AS name,
-    eleme ->> 'value' AS document_number,
-    elemento ->> 'value' AS cpf,
-    elemen ->> 'value' AS birthdate,
-    element ->> 'value' AS di_type,
-    A.accuracy
-FROM onedocs_audit.audit_report_cases C
-LEFT JOIN onedocs_conference.conference_documents CD ON C.conference_uuid = CD.conference_uuid
-LEFT JOIN onedocs_audit.di_cases_accuracy A ON C.conference_uuid = A.conference_uuid
-CROSS JOIN LATERAL jsonb_array_elements(raw_input_data::jsonb -> 'userInfos' -> 'DOCUMENT') elem
-CROSS JOIN LATERAL jsonb_array_elements(raw_input_data::jsonb -> 'userInfos' -> 'DOCUMENT') eleme
-CROSS JOIN LATERAL jsonb_array_elements(raw_input_data::jsonb -> 'userInfos' -> 'DOCUMENT') elemento
-CROSS JOIN LATERAL jsonb_array_elements(raw_input_data::jsonb -> 'userInfos' -> 'DOCUMENT') elemen
-CROSS JOIN LATERAL jsonb_array_elements(raw_input_data::jsonb -> 'userInfos' -> 'DOCUMENT') element
-WHERE C.di_is_processed = TRUE
---  AND C.di_audit_at >= CURRENT_DATE
-  AND C.validation_date >= CURRENT_DATE - 1
-  AND length(CD.file_path_optimized) > 5
-  AND A.accuracy < 1
---  AND C.di_is_reprocessed IS NULL
-  AND CD.type = 'DOCUMENT_FRONT'
-  AND elem  ->> 'key' = 'name'
-  AND eleme ->> 'key' = 'document'
-  AND elemen ->> 'key' = 'birthDate'
-  AND element ->> 'key' = 'documentDescription'
-  AND elemento ->> 'key' = 'cpf'
-ORDER BY accuracy;
+    name_elem      ->> 'value' AS person_name,
+    doc_elem       ->> 'value' AS document_number,
+    id_elem        ->> 'value' AS personal_identifier,
+    birth_elem     ->> 'value' AS birthdate,
+    type_elem      ->> 'value' AS document_type,
+    a.accuracy_score
+FROM app_audit.audit_cases c
+LEFT JOIN app_validation.case_documents cd
+    ON c.case_uuid = cd.case_uuid
+LEFT JOIN app_audit.case_accuracy a
+    ON c.case_uuid = a.case_uuid
+CROSS JOIN LATERAL jsonb_array_elements(c.raw_input_data::jsonb -> 'userInfos' -> 'DOCUMENT') name_elem
+CROSS JOIN LATERAL jsonb_array_elements(c.raw_input_data::jsonb -> 'userInfos' -> 'DOCUMENT') doc_elem
+CROSS JOIN LATERAL jsonb_array_elements(c.raw_input_data::jsonb -> 'userInfos' -> 'DOCUMENT') id_elem
+CROSS JOIN LATERAL jsonb_array_elements(c.raw_input_data::jsonb -> 'userInfos' -> 'DOCUMENT') birth_elem
+CROSS JOIN LATERAL jsonb_array_elements(c.raw_input_data::jsonb -> 'userInfos' -> 'DOCUMENT') type_elem
+WHERE c.is_processed = TRUE
+  AND c.validation_date >= CURRENT_DATE - 1
+  AND length(cd.file_path_optimized) > 5
+  AND a.accuracy_score < 1
+  AND cd.type = 'DOCUMENT_FRONT'
+  AND name_elem  ->> 'key' = 'name'
+  AND doc_elem   ->> 'key' = 'document_number'
+  AND id_elem    ->> 'key' = 'personal_id'
+  AND birth_elem ->> 'key' = 'birth_date'
+  AND type_elem  ->> 'key' = 'document_type'
+ORDER BY a.accuracy_score;
